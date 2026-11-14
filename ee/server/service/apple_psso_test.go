@@ -17,6 +17,7 @@ import (
 	authz_ctx "github.com/fleetdm/fleet/v4/server/contexts/authz"
 	"github.com/fleetdm/fleet/v4/server/dev_mode"
 	"github.com/fleetdm/fleet/v4/server/fleet"
+	apple_mdm "github.com/fleetdm/fleet/v4/server/mdm/apple"
 	"github.com/fleetdm/fleet/v4/server/mdm/apple/psso/pssocrypto"
 	"github.com/fleetdm/fleet/v4/server/mdm/apple/psso/regtoken"
 	"github.com/fleetdm/fleet/v4/server/mock"
@@ -185,6 +186,17 @@ func TestPSSO_AASAAppIDs(t *testing.T) {
 			"5K28R5ZUK5.com.fleetdm.pssotesting.extension",
 			"8VBZ3948LU.com.fleetdm.fleet-desktop",
 			"8VBZ3948LU.com.fleetdm.fleet-desktop.pssoextension",
+		}, parseApps(t, body))
+	})
+
+	t.Run("configured app IDs replace Fleet's", func(t *testing.T) {
+		require.NoError(t, apple_mdm.SetPSSOAppIDsForTest(t, "CQ629MZD6T.com.example.fleet-desktop,CQ629MZD6T.com.example.fleet-desktop.pssoextension"))
+		svc, ctx := newPSSOTestService(t, configuredPSSOTestConfig())
+		body, err := svc.PSSOAASA(ctx)
+		require.NoError(t, err)
+		require.Equal(t, []string{
+			"CQ629MZD6T.com.example.fleet-desktop",
+			"CQ629MZD6T.com.example.fleet-desktop.pssoextension",
 		}, parseApps(t, body))
 	})
 }

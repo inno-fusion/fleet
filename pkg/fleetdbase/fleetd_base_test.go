@@ -21,6 +21,27 @@ func TestGetBaseURL(t *testing.T) {
 	})
 }
 
+func TestSetBaseURL(t *testing.T) {
+	prev := configuredBaseURL.Load()
+	t.Cleanup(func() { configuredBaseURL.Store(prev) })
+
+	require.NoError(t, SetBaseURL(" https://download.example.com/ "))
+	require.Equal(t, "https://download.example.com", getBaseURL())
+	require.Equal(t, "https://download.example.com/stable/fleetd-base-manifest.plist", GetPKGManifestURL())
+
+	dev_mode.SetOverride("FLEET_DEV_DOWNLOAD_FLEETDM_URL", "https://download-testing.fleetdm.com", t)
+	require.Equal(t, "https://download-testing.fleetdm.com", getBaseURL())
+	dev_mode.SetOverride("FLEET_DEV_DOWNLOAD_FLEETDM_URL", "", t)
+
+	for _, bad := range []string{"http://download.example.com", "download.example.com", "https://", "://bad"} {
+		require.Error(t, SetBaseURL(bad), bad)
+	}
+	require.Equal(t, "https://download.example.com", getBaseURL(), "a rejected value keeps the previous one")
+
+	require.NoError(t, SetBaseURL(""))
+	require.Equal(t, "https://download.fleetdm.com", getBaseURL())
+}
+
 func TestGetMetadata(t *testing.T) {
 	expectedMetadata := &Metadata{
 		MSIURL:           "https://download-testing.fleetdm.com/archive/stable/2024-06-25_03-01-17/fleetd-base.msi",

@@ -26,6 +26,7 @@ import (
 	"github.com/fleetdm/fleet/v4/server/contexts/ctxerr"
 	"github.com/fleetdm/fleet/v4/server/dev_mode"
 	"github.com/fleetdm/fleet/v4/server/fleet"
+	apple_mdm "github.com/fleetdm/fleet/v4/server/mdm/apple"
 	"github.com/fleetdm/fleet/v4/server/mdm/apple/psso/pssocrypto"
 	"github.com/fleetdm/fleet/v4/server/mdm/apple/psso/regtoken"
 	jose "github.com/go-jose/go-jose/v4"
@@ -971,7 +972,13 @@ func (svc *Service) PSSOAASA(ctx context.Context) ([]byte, error) {
 	// production only uses Fleet's built-in app IDs but dev servers allow the production
 	// binary or a local development override.
 	ids := pssoDevAASAAppIDs()
-	ids = append(ids, fleetTeamID+"."+appBundleID, fleetTeamID+"."+extensionBundleID)
+	if custom := apple_mdm.PSSOAppIDs(); len(custom) > 0 {
+		// mdm.apple_psso_app_ids: the operator signs Fleet Desktop and the
+		// extension under their own Apple Developer team.
+		ids = append(ids, custom...)
+	} else {
+		ids = append(ids, fleetTeamID+"."+appBundleID, fleetTeamID+"."+extensionBundleID)
+	}
 	doc := pssoAASA{
 		AuthSrv: pssoAASAApps{
 			Apps: ids,

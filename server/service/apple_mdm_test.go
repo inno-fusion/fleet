@@ -9722,6 +9722,25 @@ func TestValidatePSSORegistrationTokenVariable(t *testing.T) {
 	})
 }
 
+// Not parallel: it sets the process-wide mdm.apple_psso_app_ids value.
+func TestValidatePSSORegistrationTokenVariableConfiguredAppIDs(t *testing.T) {
+	const ownExt = "com.example.fleet-desktop.pssoextension"
+	premiumLic := &fleet.LicenseInfo{Tier: fleet.TierPremium}
+	profile := pssoProfileForValidation(ownExt, "$FLEET_VAR_PSSO_DEVICE_REGISTRATION_TOKEN", true, "")
+
+	_, err := validateConfigProfileFleetVariables(profile, premiumLic, &fleet.GroupedCertificateAuthorities{})
+	require.ErrorContains(t, err, "mdm.apple_psso_app_ids")
+
+	require.NoError(t, apple_mdm.SetPSSOAppIDsForTest(t, "CQ629MZD6T.com.example.fleet-desktop,CQ629MZD6T."+ownExt))
+	vars, err := validateConfigProfileFleetVariables(profile, premiumLic, &fleet.GroupedCertificateAuthorities{})
+	require.NoError(t, err)
+	require.Contains(t, vars, string(fleet.FleetVarPSSODeviceRegistrationToken))
+
+	other := pssoProfileForValidation("com.example.other", "$FLEET_VAR_PSSO_DEVICE_REGISTRATION_TOKEN", true, "")
+	_, err = validateConfigProfileFleetVariables(other, premiumLic, &fleet.GroupedCertificateAuthorities{})
+	require.ErrorContains(t, err, "mdm.apple_psso_app_ids")
+}
+
 func TestValidateConfigProfileFleetVariables(t *testing.T) {
 	t.Parallel()
 	groupedCAs := &fleet.GroupedCertificateAuthorities{
