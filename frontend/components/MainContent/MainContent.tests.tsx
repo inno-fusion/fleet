@@ -6,6 +6,7 @@ import {
   createMockMdmConfig,
   DEFAULT_LICENSE_MOCK,
 } from "__mocks__/configMock";
+import createMockLicense from "__mocks__/licenseMock";
 import { createCustomRenderer } from "test/test-utils";
 
 import MainContent from "./MainContent";
@@ -24,6 +25,8 @@ const renderMainContent = ({
   isEJBCACertExpired = false,
   willEJBCACertExpire = false,
   isPremiumTier = true,
+  tier = "premium",
+  expiration = "2050-01-01T00:00:00Z",
 } = {}) => {
   const render = createCustomRenderer({
     context: {
@@ -34,6 +37,7 @@ const renderMainContent = ({
         isEJBCACertExpired,
         willEJBCACertExpire,
         config: createMockConfig({
+          license: createMockLicense({ tier, expiration }),
           mdm: createMockMdmConfig({
             microsoft_graph_credential_invalid: credentialInvalid,
           }),
@@ -50,6 +54,49 @@ const renderMainContent = ({
 };
 
 describe("MainContent app-wide banners", () => {
+  it("does not treat local research's absent expiry as an expired subscription", () => {
+    renderMainContent({ tier: "research", expiration: "0001-01-01T00:00:00Z" });
+    expect(
+      screen.queryByText(/Premium license is about to expire/i)
+    ).not.toBeInTheDocument();
+  });
+
+  it("still warns when a signed Premium license has expired", () => {
+    renderMainContent({ expiration: "2020-01-01T00:00:00Z" });
+    expect(
+      screen.getByText(/Premium license is about to expire/i)
+    ).toBeInTheDocument();
+  });
+
+  it("does not show the licensed host limit banner in local research mode", () => {
+    const render = createCustomRenderer({
+      context: {
+        app: {
+          isPremiumTier: true,
+          hostCount: 500,
+          config: createMockConfig({
+            license: createMockLicense({
+              tier: "research",
+              expiration: "0001-01-01T00:00:00Z",
+              device_count: 0,
+            }),
+          }),
+        },
+      },
+    });
+    render(
+      <MainContent>
+        <div>content</div>
+      </MainContent>
+    );
+    expect(screen.queryByText(/Your license covers/)).not.toBeInTheDocument();
+  });
+
+  it("still warns about invalid integration credentials in research mode", () => {
+    renderMainContent({ tier: "research", credentialInvalid: true });
+    expect(screen.getByText(GRAPH_BANNER_TEXT)).toBeInTheDocument();
+  });
+
   it("shows the Microsoft Graph banner when the credential is invalid", () => {
     renderMainContent({ credentialInvalid: true });
     expect(screen.getByText(GRAPH_BANNER_TEXT)).toBeInTheDocument();

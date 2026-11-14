@@ -11,7 +11,7 @@ import (
 type LicenseChecker interface {
 	IsPremium() bool
 	IsAllowDisableTelemetry() bool
-	// GetTier returns the license tier (e.g., "free", "premium", "trial").
+	// GetTier returns the entitlement tier (free, premium, trial, or local research).
 	GetTier() string
 	// GetOrganization returns the name of the licensed organization.
 	GetOrganization() string

@@ -555,18 +555,21 @@ func runServeCmd(cmd *cobra.Command, configManager configpkg.Manager, debug, dev
 	config.MDM.AndroidAgent.Validate(initFatal)
 	config.MDM.ValidateAndroidBatchSize(initFatal)
 	config.GoogleWorkspace.Validate(initFatal)
-	androidSvc, err := android_service.NewService(
-		ctx,
+	androidClient, err := android_service.NewAMAPIClientWithConfig(ctx, logger, config.License.Key, config.MDM)
+	if err != nil {
+		initFatal(err, "configuring Android management client")
+	}
+	androidSvc, err := android_service.NewServiceWithClient(
 		logger,
 		ds,
-		config.License.Key,
+		androidClient,
 		config.Server.PrivateKey,
 		ds,
 		func(ctx context.Context, user *fleet.User, activity fleet.ActivityDetails) error {
 			return svc.NewActivity(ctx, user, activity)
 		},
 		config.MDM.AndroidAgent,
-		redis_key_value.New(redisPool),
+		android_service.WithKeyValueStore(redis_key_value.New(redisPool)),
 		android_service.WithInstallReapTimeout(config.Server.VPPInstallReapTimeout),
 	)
 	if err != nil {
@@ -576,7 +579,7 @@ func runServeCmd(cmd *cobra.Command, configManager configpkg.Manager, debug, dev
 		androidSvc,
 		ds,
 		ds,
-		android_service.NewAMAPIClient(ctx, logger, config.License.Key),
+		androidClient,
 		logger,
 	)
 	if err != nil {

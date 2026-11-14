@@ -186,6 +186,9 @@ func (svc *Service) RequestMDMAppleCSR(ctx context.Context, email, org string) (
 		return nil, ctxerr.Wrap(ctx, err, "generate APNs CSR")
 	}
 
+	if svc.config.MDM.AppleMDMVendorCert != "" || svc.config.MDM.AppleMDMVendorKey != "" || svc.config.MDM.AppleMDMVendorChain != "" {
+		return nil, fleet.NewInvalidArgumentError("request_csr", "local vendor signing uses GET /api/v1/fleet/mdm/apple/request_csr to download the signed CSR; the deprecated email endpoint is unavailable")
+	}
 	// request the signed APNs CSR from fleetdm.com
 	client := fleethttp.NewClient(fleethttp.WithTimeout(10 * time.Second))
 	if err := apple_mdm.GetSignedAPNSCSR(client, apnsCSR); err != nil {
@@ -4432,6 +4435,9 @@ func (svc *Service) GetMDMAppleCSR(ctx context.Context) ([]byte, error) {
 		return nil, ctxerr.Wrap(ctx, err, "generate APNS cert and key")
 	}
 
+	if svc.config.MDM.AppleMDMVendorCert != "" || svc.config.MDM.AppleMDMVendorKey != "" || svc.config.MDM.AppleMDMVendorChain != "" {
+		return apple_mdm.SignAPNSCSRLocally(apnsCSR, svc.config.MDM.AppleMDMVendorCert, svc.config.MDM.AppleMDMVendorKey, svc.config.MDM.AppleMDMVendorChain)
+	}
 	// Submit CSR to fleetdm.com for signing
 	websiteClient := fleethttp.NewClient(fleethttp.WithTimeout(10 * time.Second))
 

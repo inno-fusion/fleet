@@ -540,7 +540,7 @@ func TestWriteBrowserSecurityHeadersCSPNoNonce(t *testing.T) {
 			"X-Frame-Options":           {"SAMEORIGIN"},
 			"Strict-Transport-Security": {"max-age=31536000; includeSubDomains;"},
 			"Referrer-Policy":           {"strict-origin-when-cross-origin"},
-			"Content-Security-Policy":   {"default-src 'none'; base-uri 'self'; connect-src 'self' www.gravatar.com ws: wss:; img-src 'self' www.gravatar.com data: https:; style-src 'self'; font-src 'self'; script-src 'self'"},
+			"Content-Security-Policy":   {"default-src 'none'; base-uri 'self'; connect-src 'self' ws: wss:; img-src 'self' data: https:; style-src 'self'; font-src 'self'; script-src 'self'"},
 		},
 		headers,
 	)
@@ -558,7 +558,7 @@ func TestWriteBrowserSecurityHeadersCSPAndNonce(t *testing.T) {
 			"X-Frame-Options":           {"SAMEORIGIN"},
 			"Strict-Transport-Security": {"max-age=31536000; includeSubDomains;"},
 			"Referrer-Policy":           {"strict-origin-when-cross-origin"},
-			"Content-Security-Policy":   {"default-src 'none'; base-uri 'self'; connect-src 'self' www.gravatar.com ws: wss:; img-src 'self' www.gravatar.com data: https:; style-src 'self' 'nonce-" + nonce + "'; font-src 'self'; script-src 'self' 'nonce-" + nonce + "'"},
+			"Content-Security-Policy":   {"default-src 'none'; base-uri 'self'; connect-src 'self' ws: wss:; img-src 'self' data: https:; style-src 'self' 'nonce-" + nonce + "'; font-src 'self'; script-src 'self' 'nonce-" + nonce + "'"},
 		},
 		headers,
 	)
