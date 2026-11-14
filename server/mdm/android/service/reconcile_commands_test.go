@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fleetdm/fleet/v4/server/config"
 	"github.com/fleetdm/fleet/v4/server/fleet"
 	"github.com/fleetdm/fleet/v4/server/mdm/android"
 	android_mock "github.com/fleetdm/fleet/v4/server/mdm/android/mock"
@@ -436,7 +437,7 @@ func TestReconcileAndroidCommands(t *testing.T) {
 			return &fleet.AppConfig{MDM: fleet.MDM{AndroidEnabledAndConfigured: false}}, nil
 		}
 
-		require.NoError(t, ReconcileAndroidCommands(t.Context(), &mockDS.DataStore, logger, "", noopNewActivity))
+		require.NoError(t, ReconcileAndroidCommands(t.Context(), &mockDS.DataStore, logger, "", config.MDMConfig{}, noopNewActivity))
 		require.False(t, mockDS.ListPendingMDMAndroidCommandsFuncInvoked)
 	})
 }

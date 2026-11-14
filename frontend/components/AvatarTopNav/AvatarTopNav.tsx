@@ -2,6 +2,7 @@ import classnames from "classnames";
 import React, { useState, useCallback } from "react";
 
 import { DEFAULT_GRAVATAR_LINK } from "utilities/constants";
+import { getAvatarUrl } from "utilities/helpers";
 
 interface IAvatarUserInterface {
   gravatar_url?: string;
@@ -36,7 +37,7 @@ const Avatar = ({ className, size, user }: IAvatarInterface): JSX.Element => {
       <img
         alt="User avatar"
         className={`${avatarClasses} ${isLoading || isError ? "default" : ""}`}
-        src={gravatar_url || DEFAULT_GRAVATAR_LINK}
+        src={getAvatarUrl(gravatar_url) || DEFAULT_GRAVATAR_LINK}
         onError={onError}
         onLoad={onLoad}
         data-testid="user-avatar"

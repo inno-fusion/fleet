@@ -17,6 +17,9 @@ func TestIsPremium(t *testing.T) {
 		{"no license", context.Background(), false},
 		{"free license", NewContext(context.Background(), &fleet.LicenseInfo{Tier: fleet.TierFree}), false},
 		{"premium license", NewContext(context.Background(), &fleet.LicenseInfo{Tier: fleet.TierPremium}), true},
+		{"trial license", NewContext(context.Background(), &fleet.LicenseInfo{Tier: fleet.TierTrial}), true},
+		{"research entitlement", NewContext(context.Background(), &fleet.LicenseInfo{Tier: fleet.TierResearch}), true},
+		{"unrecognized tier", NewContext(context.Background(), &fleet.LicenseInfo{Tier: "unrecognized"}), false},
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {

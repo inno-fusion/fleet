@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/fleetdm/fleet/v4/server/config"
 	"github.com/fleetdm/fleet/v4/server/contexts/ctxerr"
 	"github.com/fleetdm/fleet/v4/server/fleet"
 	"github.com/fleetdm/fleet/v4/server/mdm/android"
@@ -49,7 +50,7 @@ const (
 // re-issue it. AMAPI's operations.get is the authoritative source for a command's outcome and, unlike
 // Apple's and Windows' equivalents, needs neither the device to come back online nor AMAPI to re-send
 // anything.
-func ReconcileAndroidCommands(ctx context.Context, ds fleet.Datastore, logger *slog.Logger, licenseKey string, newActivityFn fleet.NewActivityFunc) error {
+func ReconcileAndroidCommands(ctx context.Context, ds fleet.Datastore, logger *slog.Logger, licenseKey string, mdmConfig config.MDMConfig, newActivityFn fleet.NewActivityFunc) error {
 	appConfig, err := ds.AppConfig(ctx)
 	if err != nil {
 		return ctxerr.Wrap(ctx, err, "get app config")
@@ -58,22 +59,9 @@ func ReconcileAndroidCommands(ctx context.Context, ds fleet.Datastore, logger *s
 		return nil
 	}
 
-	client := NewAMAPIClient(ctx, logger, licenseKey)
-
-	// Set the authentication secret for proxy client usage (a no-op for the Google client, which
-	// authenticates from its own env var and has no such asset). Without it every AMAPI call on the proxy
-	// path is rejected, so say so loudly rather than letting the run burn through the batch on 401s.
-	assets, err := ds.GetAllMDMConfigAssetsByName(ctx, []fleet.MDMAssetName{fleet.MDMAssetAndroidFleetServerSecret}, nil)
-	switch {
-	case err != nil:
-		logger.WarnContext(ctx, "could not read the android fleet server secret; AMAPI calls will fail if this Fleet uses the proxy client", "err", err)
-	default:
-		asset, ok := assets[fleet.MDMAssetAndroidFleetServerSecret]
-		if !ok || len(asset.Value) == 0 {
-			logger.WarnContext(ctx, "no android fleet server secret stored; AMAPI calls will fail if this Fleet uses the proxy client")
-		} else if err := client.SetAuthenticationSecret(string(asset.Value)); err != nil {
-			return ctxerr.Wrap(ctx, err, "set android fleet server secret")
-		}
+	client, err := newAuthenticatedAMAPIClient(ctx, ds, logger, licenseKey, mdmConfig)
+	if err != nil {
+		return err
 	}
 
 	return reconcileAndroidCommands(ctx, ds, client, logger, newActivityFn, time.Now().UTC(),

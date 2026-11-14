@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/fleetdm/fleet/v4/server/config"
 	"github.com/fleetdm/fleet/v4/server/contexts/ctxerr"
 	"github.com/fleetdm/fleet/v4/server/fleet"
 	"github.com/fleetdm/fleet/v4/server/mdm/android/service/androidmgmt"
@@ -25,7 +26,7 @@ const (
 // ReconcileAndroidDevices polls AMAPI for devices that Fleet still considers enrolled
 // and flips them to unenrolled if Google reports them missing (404).
 // This complements (does not replace) Pub/Sub DELETED handling.
-func ReconcileAndroidDevices(ctx context.Context, ds fleet.Datastore, logger *slog.Logger, licenseKey string, newActivityFn fleet.NewActivityFunc) error {
+func ReconcileAndroidDevices(ctx context.Context, ds fleet.Datastore, logger *slog.Logger, licenseKey string, mdmConfig config.MDMConfig, newActivityFn fleet.NewActivityFunc) error {
 	// A run that hits the AMAPI quota is retried by the next scheduled run.
 	ctx = androidmgmt.WithoutRetry(ctx)
 
@@ -43,13 +44,9 @@ func ReconcileAndroidDevices(ctx context.Context, ds fleet.Datastore, logger *sl
 		return ctxerr.Wrap(ctx, err, "get android enterprise")
 	}
 
-	client := NewAMAPIClient(ctx, logger, licenseKey)
-
-	// Best-effort set authentication secret for proxy client usage (no-op for Google client).
-	if assets, err := ds.GetAllMDMConfigAssetsByName(ctx, []fleet.MDMAssetName{fleet.MDMAssetAndroidFleetServerSecret}, nil); err == nil {
-		if asset, ok := assets[fleet.MDMAssetAndroidFleetServerSecret]; ok && len(asset.Value) > 0 {
-			_ = client.SetAuthenticationSecret(string(asset.Value))
-		}
+	client, err := newAuthenticatedAMAPIClient(ctx, ds, logger, licenseKey, mdmConfig)
+	if err != nil {
+		return err
 	}
 
 	devices, err := ds.ListAndroidEnrolledDevicesForReconcile(ctx)

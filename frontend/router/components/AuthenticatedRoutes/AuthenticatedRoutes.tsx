@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useRef } from "react";
+import React, { useContext } from "react";
 import { useErrorHandler } from "react-error-boundary";
 import { InjectedRouter } from "react-router";
 
@@ -22,11 +22,8 @@ export const AuthenticatedRoutes = ({
   location,
   router,
 }: IAppProps) => {
-  // used to ensure single pendo intialization
-  const isPendoIntialized = useRef(false);
-
   const { setRedirectLocation } = useContext(RoutingContext);
-  const { currentUser, config, isSandboxMode } = useContext(AppContext);
+  const { currentUser } = useContext(AppContext);
 
   const handlePageError = useErrorHandler();
 
@@ -48,34 +45,6 @@ export const AuthenticatedRoutes = ({
 
     return router.push(API_ONLY_USER);
   };
-
-  // used for pendo intialisation.
-  // run only on sandbox mode when pendo has not been initialized
-  // and we have values for the current user and config
-  useEffect(() => {
-    if (isSandboxMode && !isPendoIntialized.current && currentUser && config) {
-      const { email, name } = currentUser;
-      const {
-        org_info: { org_name },
-        server_settings: { server_url },
-      } = config;
-
-      // @ts-ignore
-      window?.pendo?.initialize({
-        visitor: {
-          id: email,
-          email,
-          full_name: name,
-        },
-        account: {
-          id: server_url,
-          name: org_name,
-        },
-      });
-
-      isPendoIntialized.current = true;
-    }
-  }, [isSandboxMode, currentUser, config]);
 
   useDeepEffect(() => {
     // this works with App.tsx. if authToken does

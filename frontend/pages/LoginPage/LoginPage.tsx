@@ -72,23 +72,6 @@ const LoginPage = ({ router, location }: ILoginPageProps) => {
   });
 
   useEffect(() => {
-    // this only needs to run once so we can wrap it in useEffect to avoid unneccesary third-party
-    // API calls
-    (async function testGravatarAvailability() {
-      try {
-        const response = await fetch("https://www.gravatar.com/avatar/0000");
-        if (response.ok) {
-          localStorage.setItem("gravatar_available", "true");
-        } else {
-          localStorage.setItem("gravatar_available", "false");
-        }
-      } catch (error) {
-        localStorage.setItem("gravatar_available", "false");
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
     // Requiring `authToken.get()` matters after a SPA-navigated logout: the
     // AppContext user/teams/config linger from the destroyed session, and
     // without this check LoginPage would keep pushing to /dashboard while

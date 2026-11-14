@@ -1615,7 +1615,7 @@ type VulnerabilitiesWebhookSettings struct {
 }
 
 func (c *AppConfig) ApplyDefaultsForNewInstalls() {
-	c.ServerSettings.EnableAnalytics = true
+	c.ServerSettings.EnableAnalytics = false
 
 	// Add default values for SMTPSettings.
 	var smtpSettings SMTPSettings
@@ -1684,6 +1684,9 @@ func (c *AppConfig) UnmarshalJSON(b []byte) error {
 }
 
 func (c AppConfig) MarshalJSON() ([]byte, error) {
+	// All persistence and API serialization must reflect the permanently disabled
+	// product analytics setting, even for legacy configs written by other callers.
+	c.ServerSettings.EnableAnalytics = false
 	// Define a new type, this is to prevent infinite recursion when
 	// marshalling the AppConfig struct.
 	c.assignDeprecatedFields()
@@ -2368,6 +2371,9 @@ const (
 	// this is used to distinguish between Premium, enabling different functionality
 	// when the license is expired, like disabling certain features
 	TierTrial = "trial"
+	// TierResearch enables local Premium features for development and testing.
+	// It is not a Fleet subscription and cannot authenticate to remote services.
+	TierResearch = "research"
 )
 
 // Partnerships contains specialized configuration options for Fleet partners.
@@ -2387,13 +2393,13 @@ type AuthSettings struct {
 
 // LicenseInfo contains information about the Fleet license.
 type LicenseInfo struct {
-	// Tier is the license tier (currently "free" or "premium")
+	// Tier is the entitlement tier: free, premium, trial, or local research.
 	Tier string `json:"tier"`
 	// Organization is the name of the licensed organization.
 	Organization string `json:"organization,omitempty"`
-	// DeviceCount is the number of licensed devices.
+	// DeviceCount is the number of licensed devices; zero leaves the quota unset.
 	DeviceCount int `json:"device_count,omitempty"`
-	// Expiration is when the license expires.
+	// Expiration is when the license expires. Local research has no expiration.
 	Expiration time.Time `json:"expiration,omitempty"`
 	// Note is any additional terms of license
 	Note string `json:"note,omitempty"`
@@ -2402,10 +2408,13 @@ type LicenseInfo struct {
 }
 
 func (l *LicenseInfo) IsPremium() bool {
-	return l.Tier == TierPremium || l.Tier == tierBasicDeprecated || l.Tier == TierTrial
+	return l.Tier == TierPremium || l.Tier == tierBasicDeprecated || l.Tier == TierTrial || l.Tier == TierResearch
 }
 
 func (l *LicenseInfo) IsExpired() bool {
+	if l.Tier == TierResearch {
+		return false
+	}
 	return l.Expiration.Before(time.Now())
 }
 
@@ -2415,9 +2424,9 @@ func (l *LicenseInfo) ForceUpgrade() {
 	}
 }
 
-// Both free and specific premium users are allowed to disable telemetry
+// Free, local research, and specific premium users may disable telemetry.
 func (l *LicenseInfo) IsAllowDisableTelemetry() bool {
-	return !l.IsPremium() || l.AllowDisableTelemetry
+	return l.Tier == TierResearch || !l.IsPremium() || l.AllowDisableTelemetry
 }
 
 // Tier returns the license tier.

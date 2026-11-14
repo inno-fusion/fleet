@@ -49,6 +49,7 @@ import {
   HOST_SUMMARY_DATA,
 } from "utilities/constants";
 import { normalizeEmptyValues } from "utilities/helpers";
+import { hasPremiumFeatures } from "utilities/license";
 import { isDarkMode } from "utilities/theme";
 import { getPathWithQueryParams } from "utilities/url";
 
@@ -425,7 +426,7 @@ const DeviceUserPage = ({
   const darkLogoURL = orgLogoUrlDarkMode || orgLogoUrl;
   const lightLogoURL = orgLogoUrlLightMode || orgLogoUrlLightBackground;
   const orgLogoURL = darkMode ? darkLogoURL : lightLogoURL;
-  const isPremiumTier = license?.tier === "premium";
+  const isPremiumTier = hasPremiumFeatures(license);
   const diskEncryptionSetting = host?.mdm.os_settings?.disk_encryption;
   const needsBitLockerPIN =
     diskEncryptionSetting?.action_required === "create_pin";

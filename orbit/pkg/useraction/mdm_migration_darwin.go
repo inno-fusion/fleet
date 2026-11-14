@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"github.com/fleetdm/fleet/v4/orbit/pkg/constant"
+	"github.com/fleetdm/fleet/v4/orbit/pkg/dialogassets"
 	"github.com/fleetdm/fleet/v4/orbit/pkg/migration"
-	"github.com/fleetdm/fleet/v4/orbit/pkg/swiftdialog"
 
 	fleetclient "github.com/fleetdm/fleet/v4/client"
 	"github.com/fleetdm/fleet/v4/orbit/pkg/profiles"
@@ -60,25 +60,25 @@ const defaultUnenrollmentRetryInterval = 5 * time.Second
 var mdmMigrationTemplatePreSonoma = template.Must(template.New("mdmMigrationTemplate").Parse(`
 ### Migrate to Fleet
 
-Select **Start** and look for this notification in your notification center:` +
-	"\n\n![Image showing MDM migration notification](https://fleetdm.com/images/permanent/mdm-migration-screenshot-notification-2048x480.png)\n\n" +
-	"After you start, this window will popup every 3 minutes until you finish.",
+Select **Start**, then open the enrollment notification in Notification Center and follow the instructions to enroll in Fleet.
+
+After you start, this window will popup every 3 minutes until you finish.`,
 ))
 
 var mdmManualMigrationTemplate = template.Must(template.New("").Parse(`
 ### Migrate to Fleet
 
-Select **Start** and My device page will appear soon:` +
-	"\n\n![Image showing MDM migration notification](https://fleetdm.com/images/permanent/mdm-manual-migration-1024x500.png)\n\n" +
-	"After you start, this dialog will popup every 3 minutes until you finish.",
+Select **Start** and the **My device** page will appear soon. Follow the instructions on that page to enroll in Fleet.
+
+After you start, this dialog will popup every 3 minutes until you finish.`,
 ))
 
 var mdmADEMigrationTemplate = template.Must(template.New("").Parse(`
 ### Migrate to Fleet
 
-Select **Start** and Remote Management window will appear soon:` +
-	"\n\n![Image showing MDM migration notification](https://fleetdm.com/images/permanent/mdm-ade-migration-1024x500.png)\n\n" +
-	"After you start, **Remote Management** will popup every minute until you finish.",
+Select **Start** and the **Remote Management** window will appear soon. Follow the instructions in that window to enroll in Fleet.
+
+After you start, **Remote Management** will popup every minute until you finish.`,
 ))
 
 var errorTemplate = template.Must(template.New("").Parse(`
@@ -87,7 +87,7 @@ var errorTemplate = template.Must(template.New("").Parse(`
 Please contact your IT admin.
 `))
 
-var unenrollBody = "### Migrate to Fleet\nUnenrolling you from your old MDM. This could take 90 seconds...\n\n%s"
+var unenrollBody = "### Migrate to Fleet\nUnenrolling you from your old MDM. This could take 90 seconds..."
 
 var mdmMigrationTemplateOffline = template.Must(template.New("").Parse(`
 ### Migrate to Fleet
@@ -272,9 +272,9 @@ func isDarkMode() bool {
 	return true
 }
 
-func (m *swiftDialogMDMMigrator) render(message string, flags ...string) (chan swiftDialogExitCode, chan error) {
+func (m *swiftDialogMDMMigrator) iconURL(darkMode bool) string {
 	var icon string
-	if isDarkMode() {
+	if darkMode {
 		icon = m.props.OrgInfo.OrgLogoURLDarkMode
 		if icon == "" {
 			icon = m.props.OrgInfo.OrgLogoURL
@@ -286,15 +286,13 @@ func (m *swiftDialogMDMMigrator) render(message string, flags ...string) (chan s
 		}
 	}
 
-	// If the user has not set an org logo url, we will use the default fleet logo.
-	if icon == "" {
-		icon = "https://fleetdm.com/images/permanent/fleet-mark-color-40x40@4x.png"
-	}
+	return icon
+}
 
-	iconSize, err := swiftdialog.GetIconSize(icon)
+func (m *swiftDialogMDMMigrator) render(message string, flags ...string) (chan swiftDialogExitCode, chan error) {
+	icon, iconSize, err := dialogassets.Icon(m.iconURL(isDarkMode()))
 	if err != nil {
 		log.Error().Err(err).Msg("mdm migrator: getting icon size")
-		iconSize = swiftdialog.DefaultIconSize
 	}
 
 	flags = append([]string{
@@ -314,23 +312,12 @@ func (m *swiftDialogMDMMigrator) render(message string, flags ...string) (chan s
 	return m.baseDialog.render(flags...)
 }
 
-func (m *swiftDialogMDMMigrator) renderLoadingSpinner(preSonoma, isManual bool) (chan swiftDialogExitCode, chan error) {
-	var body string
-	switch {
-	case preSonoma:
-		body = fmt.Sprintf(unenrollBody, "![Image showing MDM migration notification](https://fleetdm.com/images/permanent/mdm-migration-pre-sonoma-unenroll-1024x500.png)")
-	case isManual:
-		body = fmt.Sprintf(unenrollBody, "![Image showing MDM migration notification](https://fleetdm.com/images/permanent/mdm-manual-migration-1024x500.png)")
-	default:
-		// ADE migration, macOS > 14
-		body = fmt.Sprintf(unenrollBody, "![Image showing MDM migration notification](https://fleetdm.com/images/permanent/mdm-ade-migration-1024x500.png)")
-	}
-
-	return m.render(body,
+func (m *swiftDialogMDMMigrator) renderLoadingSpinner() (chan swiftDialogExitCode, chan error) {
+	return m.render(unenrollBody,
 		"--button1text", "Start",
 		"--button1disabled",
 		"--quitkey", "x",
-		"--height", "669",
+		"--height", "280",
 	)
 }
 
@@ -479,7 +466,7 @@ func (m *swiftDialogMDMMigrator) renderMigration() error {
 
 		if !m.props.IsUnmanaged {
 			// show the loading spinner
-			m.renderLoadingSpinner(isPreSonoma, isManualMigration)
+			m.renderLoadingSpinner()
 
 			if mdmEnrolled {
 				// send the API call
@@ -605,9 +592,7 @@ func (m *swiftDialogMDMMigrator) getMessageAndFlags(version int, isManualMigrati
 		tmpl = mdmManualMigrationTemplate
 	}
 
-	height := "669"
 	if version != 0 && version < constant.SonomaMajorVersion {
-		height = "440"
 		tmpl = mdmMigrationTemplatePreSonoma
 	}
 
@@ -624,7 +609,7 @@ func (m *swiftDialogMDMMigrator) getMessageAndFlags(version int, isManualMigrati
 		"--button1text", "Start",
 		// secondary button
 		"--button2text", "Later",
-		"--height", height,
+		"--height", "360",
 	}
 
 	if !m.props.DisableTakeover {

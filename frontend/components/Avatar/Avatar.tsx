@@ -2,6 +2,7 @@ import classnames from "classnames";
 import React, { useState, useCallback } from "react";
 
 import { COLORS } from "styles/var/colors";
+import { getAvatarUrl } from "utilities/helpers";
 
 interface IFleetAvatarProps {
   className?: string;
@@ -149,7 +150,7 @@ interface IAvatarProps {
   user: IAvatarUserInterface;
   hasWhiteBackground?: boolean;
   /**
-   * Set this to `true` to use the fleet avatar instead of the users gravatar.
+   * Set this to `true` to use the Fleet avatar instead of the user's image.
    */
   useFleetAvatar?: boolean;
   // Set this to true to show the API Only avatar
@@ -180,7 +181,7 @@ const Avatar = ({
     [`${baseClass}--${size?.toLowerCase()}`]: !!size,
     "has-white-background": !!hasWhiteBackground && !useApiOnlyAvatar,
   });
-  const { gravatar_url } = user;
+  const avatarUrl = getAvatarUrl(user.gravatar_url);
 
   let avatar;
 
@@ -188,12 +189,12 @@ const Avatar = ({
     avatar = <FleetAvatar className={avatarClasses} />;
   } else if (useApiOnlyAvatar) {
     avatar = <APIOnlyAvatar className={avatarClasses} />;
-  } else if (gravatar_url) {
+  } else if (avatarUrl) {
     avatar = (
       <img
         alt="User avatar"
         className={`${avatarClasses} ${isLoading || isError ? "default" : ""}`}
-        src={gravatar_url}
+        src={avatarUrl}
         onError={onError}
         onLoad={onLoad}
       />

@@ -21,13 +21,17 @@ import (
 	"google.golang.org/api/androidmanagement/v1"
 )
 
-func ReconcileProfiles(ctx context.Context, ds fleet.Datastore, logger *slog.Logger, licenseKey string, androidAgentConfig config.AndroidAgentConfig, batchSize int) error {
-	return ReconcileProfilesWithClient(ctx, ds, logger, licenseKey, nil, androidAgentConfig, batchSize)
+func ReconcileProfiles(ctx context.Context, ds fleet.Datastore, logger *slog.Logger, licenseKey string, mdmConfig config.MDMConfig, androidAgentConfig config.AndroidAgentConfig, batchSize int) error {
+	return reconcileProfiles(ctx, ds, logger, licenseKey, mdmConfig, nil, androidAgentConfig, batchSize)
 }
 
 // ReconcileProfilesWithClient is like ReconcileProfiles but allows injecting a custom client for testing.
 // If client is nil, a new AMAPI client will be created.
 func ReconcileProfilesWithClient(ctx context.Context, ds fleet.Datastore, logger *slog.Logger, licenseKey string, client androidmgmt.Client, androidAgentConfig config.AndroidAgentConfig, batchSize int) (err error) {
+	return reconcileProfiles(ctx, ds, logger, licenseKey, config.MDMConfig{}, client, androidAgentConfig, batchSize)
+}
+
+func reconcileProfiles(ctx context.Context, ds fleet.Datastore, logger *slog.Logger, licenseKey string, mdmConfig config.MDMConfig, client androidmgmt.Client, androidAgentConfig config.AndroidAgentConfig, batchSize int) (err error) {
 	// Hosts whose AMAPI call hits the quota are recorded as failed and picked up on a later run; waiting out
 	// the quota here would stall every other host in the batch.
 	ctx = androidmgmt.WithoutRetry(ctx)
@@ -49,14 +53,9 @@ func ReconcileProfilesWithClient(ctx context.Context, ds fleet.Datastore, logger
 	}
 
 	if client == nil {
-		client = NewAMAPIClient(ctx, logger, licenseKey)
-		authSecret, err := getClientAuthenticationSecret(ctx, ds)
+		client, err = newAuthenticatedAMAPIClient(ctx, ds, logger, licenseKey, mdmConfig)
 		if err != nil {
-			return ctxerr.Wrap(ctx, err, "getting Android client authentication secret for profile reconciler")
-		}
-		err = client.SetAuthenticationSecret(authSecret)
-		if err != nil {
-			return ctxerr.Wrap(ctx, err, "setting Android client authentication secret for profile reconciler")
+			return err
 		}
 	}
 
