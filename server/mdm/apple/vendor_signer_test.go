@@ -88,3 +88,29 @@ func TestLocalVendorCSRSigning(t *testing.T) {
 	_, err = SignAPNSCSRLocally(csr, certPath, keyPath, chainPath)
 	require.ErrorContains(t, err, "match")
 }
+
+func TestCheckSelfSignedRootAppleSHA1Root(t *testing.T) {
+	appleRoot := readTestCertPEM(t, "testdata/apple-root-ca.pem")
+	require.Equal(t, x509.SHA1WithRSA, appleRoot.SignatureAlgorithm)
+	require.NoError(t, checkSelfSignedRoot(appleRoot))
+
+	tampered := *appleRoot
+	tampered.Signature = append([]byte(nil), appleRoot.Signature...)
+	tampered.Signature[0] ^= 0xff
+	require.Error(t, checkSelfSignedRoot(&tampered))
+
+	wwdr := readTestCertPEM(t, "testdata/apple-wwdr-ca-g3.pem")
+	require.NoError(t, wwdr.CheckSignatureFrom(appleRoot))
+	require.Error(t, checkSelfSignedRoot(wwdr))
+}
+
+func readTestCertPEM(t *testing.T, path string) *x509.Certificate {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	block, _ := pem.Decode(data)
+	require.NotNil(t, block)
+	cert, err := x509.ParseCertificate(block.Bytes)
+	require.NoError(t, err)
+	return cert
+}
