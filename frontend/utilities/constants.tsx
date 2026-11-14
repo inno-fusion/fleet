@@ -8,6 +8,8 @@ import { DisplayPlatform, Platform } from "interfaces/platform";
 import { ISchedulableQuery } from "interfaces/schedulable_query";
 import URL_PREFIX from "router/url_prefix";
 
+import defaultAvatarUrl from "../../assets/images/avatar.svg";
+
 const { origin } = global.window.location;
 export const BASE_URL = `${origin}${URL_PREFIX}/api`;
 
@@ -18,17 +20,13 @@ export enum PolicyResponse {
   FAILING = "failing",
 }
 
-export const DEFAULT_GRAVATAR_LINK =
-  "https://fleetdm.com/images/permanent/icon-avatar-default-gray-transparent-64x64@2x.png";
+export const DEFAULT_GRAVATAR_LINK = defaultAvatarUrl;
 
-export const DEFAULT_GRAVATAR_LINK_DARK =
-  "https://fleetdm.com/images/permanent/icon-avatar-default-dark-24x24%402x.png";
+export const DEFAULT_GRAVATAR_LINK_DARK = defaultAvatarUrl;
 
-export const DEFAULT_GRAVATAR_LINK_FALLBACK =
-  "/assets/images/icon-avatar-default-gray-transparent-64x64@2x.png";
+export const DEFAULT_GRAVATAR_LINK_FALLBACK = defaultAvatarUrl;
 
-export const DEFAULT_GRAVATAR_LINK_DARK_FALLBACK =
-  "/assets/images/icon-avatar-default-dark-24x24%402x.png";
+export const DEFAULT_GRAVATAR_LINK_DARK_FALLBACK = defaultAvatarUrl;
 
 export const ACTIVITY_EXPIRY_WINDOW_DROPDOWN_OPTIONS: IDropdownOption[] = [
   { value: 30, label: "30 days" },

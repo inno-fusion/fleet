@@ -1778,15 +1778,6 @@ func (ds *Datastore) AsyncBatchUpdateLabelTimestamp(ctx context.Context, ids []u
 	})
 }
 
-func amountLabelsDB(ctx context.Context, db sqlx.QueryerContext) (int, error) {
-	var amount int
-	err := sqlx.GetContext(ctx, db, &amount, `SELECT count(*) FROM labels`)
-	if err != nil {
-		return 0, err
-	}
-	return amount, nil
-}
-
 func (ds *Datastore) LabelsSummary(ctx context.Context, filter fleet.TeamFilter) ([]*fleet.LabelSummary, error) {
 	var labelsSummary []*fleet.LabelSummary
 

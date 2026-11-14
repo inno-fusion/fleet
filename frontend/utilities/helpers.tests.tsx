@@ -10,6 +10,68 @@ import helpers, {
 } from "./helpers";
 
 describe("helpers utilities", () => {
+  describe("addGravatarUrlToResource function", () => {
+    it.each([undefined, "true", "false"])(
+      "does not derive an external avatar from an email (availability: %s)",
+      (availability) => {
+        if (availability === undefined) {
+          localStorage.removeItem("gravatar_available");
+        } else {
+          localStorage.setItem("gravatar_available", availability);
+        }
+        const resource = { email: "Admin@Example.com", name: "Admin" };
+        const result = helpers.addGravatarUrlToResource(resource);
+
+        expect(result).toEqual({
+          ...resource,
+          gravatar_url: undefined,
+          gravatar_url_dark: undefined,
+        });
+        expect(resource).not.toHaveProperty("gravatar_url");
+        localStorage.removeItem("gravatar_available");
+      }
+    );
+
+    it.each([
+      "https://www.gravatar.com/avatar/email-hash",
+      "https://secure.gravatar.com/avatar/email-hash",
+      "//GRAVATAR.com/avatar/email-hash",
+      "https://fleetdm.com/images/permanent/icon-avatar-default-gray-transparent-64x64@2x.png",
+      "https://www.fleetdm.com/images/permanent/icon-avatar-default-dark-24x24%402x.png",
+    ])("discards a legacy vendor avatar: %s", (url) => {
+      expect(
+        helpers.addGravatarUrlToResource({
+          gravatar_url: url,
+          gravatar_url_dark: url,
+        })
+      ).toEqual({ gravatar_url: undefined, gravatar_url_dark: undefined });
+    });
+
+    it.each([
+      "https://images.example.com/avatar.png",
+      "https://gravatar.com.example.com/avatar.png",
+      "https://fleetdm.com/custom-avatar.png",
+      "/assets/custom-avatar.png",
+      "data:image/png;base64,aGVsbG8=",
+    ])("preserves an explicitly configured custom avatar: %s", (url) => {
+      const resource = { gravatar_url: url, gravatar_url_dark: url };
+      expect(helpers.addGravatarUrlToResource(resource)).toEqual(resource);
+    });
+
+    it("discards malformed avatar URLs without affecting the user resource", () => {
+      expect(
+        helpers.addGravatarUrlToResource({
+          name: "Admin",
+          gravatar_url: "https://[invalid",
+        })
+      ).toEqual({
+        name: "Admin",
+        gravatar_url: undefined,
+        gravatar_url_dark: undefined,
+      });
+    });
+  });
+
   describe("removeOSPrefix function", () => {
     it("properly removes Apple prefix from a host's operating system version", () => {
       expect(removeOSPrefix("macOS 14.1.2")).toEqual("14.1.2");

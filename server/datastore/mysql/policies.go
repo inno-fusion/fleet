@@ -2322,15 +2322,6 @@ func (ds *Datastore) ApplyPolicySpecs(ctx context.Context, authorID uint, specs 
 	return nil
 }
 
-func amountPoliciesDB(ctx context.Context, db sqlx.QueryerContext) (int, error) {
-	var amount int
-	err := sqlx.GetContext(ctx, db, &amount, `SELECT count(*) FROM policies`)
-	if err != nil {
-		return 0, err
-	}
-	return amount, nil
-}
-
 // amountPoliciesAutomationEnabledSoftwareDB counts the policies with a software automation,
 // reusing the predicate behind the automation_type=software filter so the two can't drift.
 //

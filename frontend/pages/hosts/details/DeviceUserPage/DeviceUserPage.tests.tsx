@@ -232,6 +232,21 @@ describe("Device User Page", () => {
 
       expect(screen.queryByText(REGULAR_DUP_MATCHER)).toBeNull();
     });
+    it("enables setup experience for the local research entitlement", async () => {
+      const host = createMockHost() as IHostDevice;
+      host.platform = "linux";
+
+      await setupTest({
+        host,
+        license: createMockLicense({ tier: "research" }),
+      });
+
+      expect(
+        await screen.findByText(SETTING_UP_YOUR_DEVICE_MATCHER)
+      ).toBeInTheDocument();
+      expect(screen.queryByText(REGULAR_DUP_MATCHER)).not.toBeInTheDocument();
+    });
+
     it("checks for setup experience steps on Fleet Premium, and renders the normal device user page if there are such steps", async () => {
       const host = createMockHost() as IHostDevice;
       host.platform = "linux";

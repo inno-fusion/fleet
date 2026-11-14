@@ -100,9 +100,9 @@ const ConfirmationPage = ({
         {importOsqueryConfig()}
       </div>
       <p className={`${baseClass}__help-text`}>
-        Fleet Device Management Inc. periodically collects information about
-        your instance. Sending usage statistics from your Fleet instance is
-        optional and can be disabled in settings.
+        Fleet product analytics collection and uploads are permanently disabled
+        in this build. Device inventory and operator-configured observability
+        remain available.
       </p>
       <div className="button-wrap--center">
         <Button

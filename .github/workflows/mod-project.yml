@@ -1,0 +1,89 @@
+name: Mod project verification
+
+on:
+  push:
+    branches: [mod-project]
+  pull_request:
+    branches: [mod-project]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mod-project-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    if: github.repository == 'inno-fusion/fleet'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      COMPOSE_PROJECT_NAME: fleet-mod-ci
+      MYSQL_TEST: '1'
+      REDIS_TEST: '1'
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd 'redis-cli ping'
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - name: Set scratch directory
+        run: printf 'TMPDIR=%s\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@5e21ff4d9bc1a8cf6de233a3057d20ec6b3fb69d
+        with:
+          node-version-file: package.json
+      - run: corepack enable && yarn install --frozen-lockfile --non-interactive
+      - name: Start actual upstream MySQL test service
+        run: |
+          docker compose up -d mysql_test
+          for attempt in $(seq 1 60); do
+            if docker compose exec -T mysql_test mysqladmin -uroot -ptoor ping; then exit 0; fi
+            sleep 2
+          done
+          docker compose logs mysql_test
+          exit 1
+      - name: Backend unit and authorization regressions
+        run: >-
+          env -u REDIS_TEST go test ./ee/server/licensing ./server/contexts/license ./server/fleet
+          ./server/config ./server/mdm/apple/... ./server/mdm/android/service/...
+          ./server/platform/endpointer ./server/authz ./server/service/middleware/auth ./pkg/spec
+      - name: Analytics, statistics and local signing regressions (MySQL enabled)
+        run: >-
+          go test ./cmd/fleet ./server/service ./server/datastore/mysql
+          -run 'Test.*(Analytics|Statistics|LocalVendorSigning|ModifyAppConfig|MDMAppleAuthorization|GetMDMApple|Android.*Provider|Android.*Routing)' -count=1 -v
+      - name: Frontend privacy and entitlement regressions
+        run: >-
+          yarn test --runInBand --watch=false
+          --testPathPattern='Statistics|permissions|utilities/license|MainContent|DeviceUserPage|AccountSidePanel|context/app|AuthenticatedRoutes|LoginPage|Avatar|utilities/helpers|components/App'
+      - name: Type check
+        run: yarn tsc --noEmit
+      - name: Build versioned dashboard and server
+        run: bash tools/mod-project/build.sh
+      - name: Embedded mail and agent presentation regressions
+        run: |
+          go test -tags full ./server/mail -count=1
+          go test ./server/service -run 'Test.*(Email|Asset|Subpath|WriteBrowserSecurityHeaders|LocalVendorSigning)' -count=1
+          go test -race ./orbit/pkg/dialogassets ./orbit/pkg/setup_experience ./orbit/pkg/useraction ./orbit/pkg/swiftdialog -count=1
+      - name: Install browser for built-app smoke
+        run: yarn playwright install --with-deps chromium
+      - name: Research and free-mode HTTP and browser smoke
+        run: |
+          FLEET_MOD_BROWSER_SMOKE=1 bash tools/mod-project/run-smoke.sh research
+          bash tools/mod-project/run-smoke.sh free
+      - name: Diff hygiene
+        run: git diff --check
+      - name: Stop disposable database
+        if: always()
+        run: docker compose down -v

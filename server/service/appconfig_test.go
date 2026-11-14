@@ -2891,102 +2891,78 @@ func TestModifyAppConfigSMTPSSOAgentOptions(t *testing.T) {
 	require.JSONEq(t, string(newAgentOptions), string(*dsAppConfig.AgentOptions))
 }
 
-// TestModifyEnableAnalytics tests that a premium customer cannot set ServerSettings.EnableAnalytics to be false.
-// Free customers should be able to set the value to false, however.
 func TestModifyEnableAnalytics(t *testing.T) {
-	ds := new(mock.Store)
-
-	admin := &fleet.User{GlobalRole: ptr.String(fleet.RoleAdmin)}
-
-	testCases := []struct {
-		name                  string
-		expectedEnabled       bool
-		newEnabled            bool
-		initialEnabled        bool
-		licenseTier           string
-		allowDisableTelemetry bool
-		initialURL            string
-		newURL                string
-		expectedURL           string
-		shouldFailModify      bool
+	licenses := []struct {
+		name string
+		info fleet.LicenseInfo
 	}{
-		{
-			name:            "fleet free",
-			expectedEnabled: false,
-			initialEnabled:  true,
-			newEnabled:      false,
-			licenseTier:     fleet.TierFree,
-		},
-		{
-			name:            "fleet premium",
-			expectedEnabled: true,
-			initialEnabled:  true,
-			newEnabled:      false,
-			licenseTier:     fleet.TierPremium,
-		},
-		{
-			name:                  "fleet premium with allow disable telemetry",
-			expectedEnabled:       false,
-			initialEnabled:        true,
-			newEnabled:            false,
-			licenseTier:           fleet.TierPremium,
-			allowDisableTelemetry: true,
-		},
+		{"free", fleet.LicenseInfo{Tier: fleet.TierFree}},
+		{"premium", fleet.LicenseInfo{Tier: fleet.TierPremium}},
+		{"research", fleet.LicenseInfo{Tier: fleet.TierResearch}},
+		{"premium allowing opt-out", fleet.LicenseInfo{Tier: fleet.TierPremium, AllowDisableTelemetry: true}},
 	}
+	patches := []struct {
+		name string
+		body string
+	}{
+		{"explicit opt-in", `{"server_settings":{"enable_analytics":true}}`},
+		{"explicit opt-out", `{"server_settings":{"enable_analytics":false}}`},
+		{"unrelated server setting", `{"server_settings":{"server_url":"https://localhost:8080"}}`},
+		{"omitted server settings", `{}`},
+	}
+	for _, lic := range licenses {
+		for _, initiallyEnabled := range []bool{false, true} {
+			for _, patch := range patches {
+				for _, dryRun := range []bool{false, true} {
+					name := fmt.Sprintf("%s/initial=%t/%s/dry_run=%t", lic.name, initiallyEnabled, patch.name, dryRun)
+					t.Run(name, func(t *testing.T) {
+						ds := new(mock.Store)
+						svc, ctx := newTestService(t, ds, nil, nil, &TestServerOpts{License: &lic.info})
+						ctx = viewer.NewContext(ctx, viewer.Viewer{User: &fleet.User{GlobalRole: ptr.String(fleet.RoleAdmin)}})
+						persisted := &fleet.AppConfig{
+							OrgInfo: fleet.OrgInfo{OrgName: "Test"},
+							ServerSettings: fleet.ServerSettings{
+								EnableAnalytics: initiallyEnabled,
+								ServerURL:       "https://localhost:8080",
+							},
+						}
+						persisted.Features.ApplyDefaultsForNewInstalls()
+						ds.AppConfigFunc = func(context.Context) (*fleet.AppConfig, error) { return persisted.Copy(), nil }
+						saves := 0
+						ds.SaveAppConfigFunc = func(_ context.Context, conf *fleet.AppConfig) error {
+							saves++
+							require.False(t, conf.ServerSettings.EnableAnalytics)
+							persisted = conf.Copy()
+							return nil
+						}
+						ds.SaveABMTokenFunc = func(context.Context, *fleet.ABMToken) error { return nil }
+						ds.ListVPPTokensFunc = func(context.Context) ([]*fleet.VPPTokenDB, error) { return nil, nil }
+						ds.ListABMTokensFunc = func(context.Context) ([]*fleet.ABMToken, error) { return nil, nil }
 
-	for _, tt := range testCases {
-		t.Run(tt.name, func(t *testing.T) {
-			svc, ctx := newTestService(t, ds, nil, nil, &TestServerOpts{License: &fleet.LicenseInfo{Tier: tt.licenseTier, AllowDisableTelemetry: tt.allowDisableTelemetry}})
-			ctx = viewer.NewContext(ctx, viewer.Viewer{User: admin})
+						ac, err := svc.AppConfigObfuscated(ctx)
+						require.NoError(t, err)
+						require.False(t, ac.ServerSettings.EnableAnalytics, "report disabled even before the first save")
+						require.Equal(t, initiallyEnabled, persisted.ServerSettings.EnableAnalytics, "reads must not mutate persisted config")
 
-			dsAppConfig := &fleet.AppConfig{
-				OrgInfo: fleet.OrgInfo{
-					OrgName: "Test",
-				},
-				ServerSettings: fleet.ServerSettings{
-					EnableAnalytics: true,
-					ServerURL:       "https://localhost:8080",
-				},
+						modified, err := svc.ModifyAppConfig(ctx, []byte(patch.body), fleet.ApplySpecOptions{DryRun: dryRun})
+						require.NoError(t, err)
+						require.NotNil(t, modified)
+						require.False(t, modified.ServerSettings.EnableAnalytics)
+						if dryRun {
+							require.Zero(t, saves)
+							require.Equal(t, initiallyEnabled, persisted.ServerSettings.EnableAnalytics)
+						} else {
+							require.Positive(t, saves, "must persist stale enabled config, even for an otherwise empty PATCH")
+							require.False(t, persisted.ServerSettings.EnableAnalytics)
+						}
+						require.True(t, persisted.Features.EnableSoftwareInventory)
+						require.True(t, persisted.Features.EnableHostUsers)
+						require.True(t, persisted.Features.HistoricalData.Uptime)
+						require.True(t, persisted.Features.HistoricalData.Vulnerabilities)
+					})
+				}
 			}
-
-			ds.AppConfigFunc = func(ctx context.Context) (*fleet.AppConfig, error) {
-				return dsAppConfig, nil
-			}
-
-			ds.SaveAppConfigFunc = func(ctx context.Context, conf *fleet.AppConfig) error {
-				*dsAppConfig = *conf
-				return nil
-			}
-
-			ds.SaveABMTokenFunc = func(ctx context.Context, tok *fleet.ABMToken) error {
-				return nil
-			}
-
-			ds.ListVPPTokensFunc = func(ctx context.Context) ([]*fleet.VPPTokenDB, error) {
-				return []*fleet.VPPTokenDB{}, nil
-			}
-
-			ds.ListABMTokensFunc = func(ctx context.Context) ([]*fleet.ABMToken, error) {
-				return []*fleet.ABMToken{}, nil
-			}
-
-			ac, err := svc.AppConfigObfuscated(ctx)
-			require.NoError(t, err)
-			require.Equal(t, tt.initialEnabled, ac.ServerSettings.EnableAnalytics)
-
-			raw, err := json.Marshal(fleet.ServerSettings{EnableAnalytics: tt.newEnabled, ServerURL: "https://localhost:8080"})
-			require.NoError(t, err)
-			raw = []byte(`{"server_settings":` + string(raw) + `}`)
-			modified, err := svc.ModifyAppConfig(ctx, raw, fleet.ApplySpecOptions{})
-			require.NoError(t, err)
-
-			if modified != nil {
-				require.Equal(t, tt.expectedEnabled, modified.ServerSettings.EnableAnalytics)
-				ac, err = svc.AppConfigObfuscated(ctx)
-				require.NoError(t, err)
-				require.Equal(t, tt.expectedEnabled, ac.ServerSettings.EnableAnalytics)
-			}
-		})
+		}
 	}
 }
 

@@ -482,7 +482,7 @@ if (!isPremiumTier) {
 }
 ```
 
-`isPremiumTier` is derived from `config.license.tier === "premium"` in `utilities/permissions/permissions.ts` and set once during `AppContext` initialization — `true` for Premium / Enterprise, `false` for Free. **The Free check is the negation, `!isPremiumTier`.** Tests inject the value via the `app` context override.
+`isPremiumTier` is derived through `hasPremiumFeatures(config.license)` in `utilities/license.ts` and `utilities/permissions/permissions.ts`, then exposed by `AppContext` — `true` for Premium, trial, legacy Basic, and explicit local research; `false` for Free. **The Free check is the negation, `!isPremiumTier`.** Tests inject the value via the `app` context override.
 
 #### Patterns
 
@@ -577,7 +577,7 @@ Mock the flag in the test context (`isPremiumTier: false` for Free; `config: cre
 | | Fleet Free | Primo mode | GitOps mode |
 |---|---|---|---|
 | Purpose | Free vs Premium feature gating | Single-fleet UI for partners | Repository-driven config management |
-| Config | `license.tier !== "premium"` (i.e., `!isPremiumTier`) | `partnerships.enable_primo` | `gitops.gitops_mode_enabled` |
+| Config | `!hasPremiumFeatures(config.license)` (i.e., `!isPremiumTier`) | `partnerships.enable_primo` | `gitops.gitops_mode_enabled` |
 | Main effect | Paywall (`<PremiumFeatureMessage />`) | Disables fleet creation, defaults to "Unassigned" | Disables manual editing |
 | Component | Conditional checks + paywall | Conditional checks on the flag | `GitOpsModeTooltipWrapper` |
 

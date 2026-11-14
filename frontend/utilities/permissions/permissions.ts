@@ -1,5 +1,6 @@
 import { IConfig } from "interfaces/config";
 import { IUser } from "interfaces/user";
+import { hasPremiumFeatures } from "utilities/license";
 
 export const isSandboxMode = (config: IConfig): boolean => {
   return !!config.sandbox_enabled; // TODO: confirm null/undefined config should treated as false based on final API spec
@@ -10,7 +11,7 @@ export const isFreeTier = (config: IConfig): boolean => {
 };
 
 export const isPremiumTier = (config: IConfig): boolean => {
-  return config.license.tier === "premium";
+  return hasPremiumFeatures(config.license);
 };
 
 export const isMacMdmEnabledAndConfigured = (config: IConfig): boolean => {

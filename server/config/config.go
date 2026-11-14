@@ -1287,7 +1287,10 @@ type MDMConfig struct {
 	AppleSCEPSignerValidityDays int `yaml:"apple_scep_signer_validity_days"`
 	// AppleConnectJWT is the Apple Connect JWT used to access VPP app metadata.
 	// If supplied, Fleet will contact the Apple API directly rather than checking the Fleet proxy
-	AppleConnectJWT string `yaml:"apple_vpp_app_metadata_api_bearer_token"`
+	AppleConnectJWT     string `yaml:"apple_vpp_app_metadata_api_bearer_token"`
+	AppleMDMVendorCert  string `yaml:"apple_mdm_vendor_cert"`
+	AppleMDMVendorKey   string `yaml:"apple_mdm_vendor_key"`
+	AppleMDMVendorChain string `yaml:"apple_mdm_vendor_chain"`
 
 	// WindowsWSTEPIdentityCert is the path to the certificate used to sign
 	// WSTEP responses.
@@ -1350,8 +1353,10 @@ type MDMConfig struct {
 	// because the platforms deliver the secret by different mechanisms and can be rolled out independently.
 	WindowsOneTimeEnrollSecrets bool `yaml:"windows_one_time_enroll_secrets"`
 
-	AndroidAgent     AndroidAgentConfig `yaml:"android_agent"`
-	AndroidBatchSize int                `yaml:"android_batch_size"`
+	AndroidAgent                    AndroidAgentConfig `yaml:"android_agent"`
+	AndroidBatchSize                int                `yaml:"android_batch_size"`
+	AndroidGoogleServiceCredentials string             `yaml:"android_google_service_credentials"`
+	AndroidProxyURL                 string             `yaml:"android_proxy_url"`
 
 	// AppleSCEPStaticChallengeEnabled controls whether static SCEP challenges are allowed alongside dynamic challenges.
 	AppleSCEPStaticChallengeEnabled bool `yaml:"apple_scep_static_challenge_enabled"`
@@ -2325,6 +2330,9 @@ func (man Manager) addConfigs() {
 	man.addConfigBool("mdm.apple_machineinfo_verify", true, "Verify the signature on Apple's x-apple-aspen-deviceinfo (MachineInfo) blob during enrollment")
 	man.addConfigInt("mdm.apple_scep_signer_validity_days", 365, "Days signed client certificates will be valid")
 	man.addConfigString("mdm.apple_vpp_app_metadata_api_bearer_token", "", "Apple Connect JWT, used for accessing VPP app metadata directly from Apple")
+	man.addConfigString("mdm.apple_mdm_vendor_cert", "", "PEM MDM vendor signing certificate path for local APNs CSR signing")
+	man.addConfigString("mdm.apple_mdm_vendor_key", "", "PEM MDM vendor signing private key path (PKCS1 or PKCS8)")
+	man.addConfigString("mdm.apple_mdm_vendor_chain", "", "PEM Apple intermediate and root certificate chain path for the MDM vendor certificate")
 	man.addConfigString("mdm.apple_scep_challenge", "", "SCEP static challenge for enrollment")
 	man.addConfigDuration("mdm.apple_dep_sync_periodicity", 1*time.Minute, "How much time to wait for DEP profile assignment")
 	man.addConfigDuration("mdm.apple_apns_push_expiration", 30*24*time.Hour, "How long APNs should store and retry delivering push notifications to offline devices (apns-expiration header, 30 days is APNs' documented maximum); zero or negative omits the header")
@@ -2358,6 +2366,8 @@ func (man Manager) addConfigs() {
 	man.hideConfig("mdm.android_agent.package")
 	man.hideConfig("mdm.android_agent.signing_sha256")
 	man.addConfigInt("mdm.android_batch_size", 100, "Maximum number of hosts per batch for Android MDM API operations (100 default; 0 = no limit)")
+	man.addConfigString("mdm.android_google_service_credentials", "", "Google service account JSON file path for direct Android Management API access; requires Google authorization")
+	man.addConfigString("mdm.android_proxy_url", "", "HTTPS endpoint of an independently operated Android management proxy; mutually exclusive with direct Google credentials")
 	man.hideConfig("mdm.android_batch_size")
 	man.addConfigBool("mdm.apple_scep_static_challenge_enabled", true, "Allows static SCEP challenges to be used alongside dynamic challenges for Apple MDM SCEP")
 
@@ -2746,6 +2756,9 @@ func (man Manager) LoadConfig() FleetConfig {
 			AppleMachineInfoVerify:            man.getConfigBool("mdm.apple_machineinfo_verify"),
 			AppleSCEPSignerValidityDays:       man.getConfigInt("mdm.apple_scep_signer_validity_days"),
 			AppleConnectJWT:                   man.getConfigString("mdm.apple_vpp_app_metadata_api_bearer_token"),
+			AppleMDMVendorCert:                man.getConfigString("mdm.apple_mdm_vendor_cert"),
+			AppleMDMVendorKey:                 man.getConfigString("mdm.apple_mdm_vendor_key"),
+			AppleMDMVendorChain:               man.getConfigString("mdm.apple_mdm_vendor_chain"),
 			AppleSCEPChallenge:                man.getConfigString("mdm.apple_scep_challenge"),
 			AppleDEPSyncPeriodicity:           man.getConfigDuration("mdm.apple_dep_sync_periodicity"),
 			AppleAPNsPushExpiration:           man.getConfigDuration("mdm.apple_apns_push_expiration"),
@@ -2771,6 +2784,8 @@ func (man Manager) LoadConfig() FleetConfig {
 				SigningSHA256: man.getConfigString("mdm.android_agent.signing_sha256"),
 			},
 			AndroidBatchSize:                         man.getConfigInt("mdm.android_batch_size"),
+			AndroidGoogleServiceCredentials:          man.getConfigString("mdm.android_google_service_credentials"),
+			AndroidProxyURL:                          man.getConfigString("mdm.android_proxy_url"),
 			AppleSCEPStaticChallengeEnabled:          man.getConfigBool("mdm.apple_scep_static_challenge_enabled"),
 			AppleCommandCleanupShortRetention:        man.getConfigDuration("mdm.apple_command_cleanup_short_retention"),
 			AppleCommandCleanupStandardRetention:     man.getConfigDuration("mdm.apple_command_cleanup_standard_retention"),

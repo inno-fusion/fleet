@@ -179,14 +179,9 @@ func (svc *Service) EnterpriseSignup(ctx context.Context) (*android.SignupDetail
 		return nil, err
 	}
 
-	// Before checking if Android is already configured, verify if existing enterprise still exists
-	// This ensures we detect enterprise deletion even if user goes directly to signup page
+	// Do not replace an existing enterprise when the selected provider cannot verify it.
 	if err := svc.VerifyExistingEnterpriseIfAny(ctx); err != nil {
-		// If verification returns NotFound (enterprise was deleted), continue with signup
-		// Other errors should be returned as-is
-		if !fleet.IsNotFound(err) {
-			return nil, err
-		}
+		return nil, err
 	}
 
 	appConfig, err := svc.checkIfAndroidAlreadyConfigured(ctx)
@@ -837,14 +832,15 @@ func (svc *Service) signupSSECheck(ctx context.Context, done chan string) bool {
 }
 
 // verifyEnterpriseExistsWithGoogle verifies if the given enterprise still exists in Google API.
-// Uses LIST-first approach for efficiency and better error handling.
-// Returns fleet.IsNotFound error if enterprise was deleted, nil if verification passed.
+// Absence cannot prove deletion: the configured provider or Google project may have changed.
 func (svc *Service) verifyEnterpriseExistsWithGoogle(ctx context.Context, enterprise *android.Enterprise) error {
 	secret, err := svc.getClientAuthenticationSecret(ctx)
 	if err != nil {
 		return ctxerr.Wrap(ctx, err, "getting client authentication secret")
 	}
-	_ = svc.androidAPIClient.SetAuthenticationSecret(secret)
+	if err := svc.androidAPIClient.SetAuthenticationSecret(secret); err != nil {
+		return ctxerr.Wrap(ctx, err, "setting client authentication secret")
+	}
 
 	// Get server URL from app config
 	appConfig, err := svc.ds.AppConfig(ctx)
@@ -858,13 +854,6 @@ func (svc *Service) verifyEnterpriseExistsWithGoogle(ctx context.Context, enterp
 		var gerr *googleapi.Error
 		if errors.As(err, &gerr) {
 			switch gerr.Code {
-			case http.StatusNotFound:
-				// Special case: 404 from proxy with deletion confirmation
-				if strings.Contains(gerr.Message, "PROXY_VERIFIED_DELETED:") {
-					svc.logger.InfoContext(ctx, "enterprise confirmed deleted by proxy", "enterpriseID", enterprise.EnterpriseID)
-					svc.cleanupDeletedEnterprise(ctx, enterprise, enterprise.EnterpriseID)
-					return fleet.NewInvalidArgumentError("enterprise", "Android Enterprise has been deleted").WithStatus(http.StatusNotFound)
-				}
 			case http.StatusBadRequest:
 				// Bad request might indicate missing headers or invalid request format
 				// Don't delete the enterprise in this case
@@ -879,22 +868,23 @@ func (svc *Service) verifyEnterpriseExistsWithGoogle(ctx context.Context, enterp
 		// LIST failed - this is likely a technical issue, not deletion
 		// Log the error but don't delete the enterprise
 		svc.logger.ErrorContext(ctx, "failed to list enterprises", "error", err)
-		return fmt.Errorf("verifying enterprise with Google: %s", err.Error())
+		return fmt.Errorf("verifying enterprise with Google: %w", err)
 	}
 
 	// Check if our enterprise is in the list
 	enterpriseID := strings.TrimPrefix(enterprise.EnterpriseID, "enterprises/")
 	for _, ent := range enterprises {
-		if strings.HasSuffix(ent.Name, enterpriseID) {
+		if ent != nil && ent.Name == "enterprises/"+enterpriseID && enterpriseID != "" {
 			// Enterprise exists - verification passed
 			return nil
 		}
 	}
 
-	// Enterprise NOT in list - it's deleted - perform cleanup
-	svc.logger.InfoContext(ctx, "enterprise confirmed deleted via LIST API", "enterpriseID", enterpriseID)
-	svc.cleanupDeletedEnterprise(ctx, enterprise, enterpriseID)
-	return fleet.NewInvalidArgumentError("enterprise", "Android Enterprise has been deleted").WithStatus(http.StatusNotFound)
+	// Existing installations do not persist provider/project identity. Preserve enrollment
+	// on an unverified absence, including after a provider switch. Explicit disconnection
+	// through DeleteEnterprise remains available to an authorized administrator.
+	return fleet.NewInvalidArgumentError("enterprise",
+		"Android Enterprise is not visible to the configured provider or Google project; verify the Android provider and credentials before disconnecting or reconnecting").WithStatus(http.StatusConflict)
 }
 
 func (svc *Service) VerifyExistingEnterpriseIfAny(ctx context.Context) error {
@@ -910,39 +900,6 @@ func (svc *Service) VerifyExistingEnterpriseIfAny(ctx context.Context) error {
 
 	// Enterprise exists - verify it using the shared method
 	return svc.verifyEnterpriseExistsWithGoogle(ctx, enterprise)
-}
-
-// cleanupDeletedEnterprise performs the complete cleanup when an enterprise deletion is detected
-func (svc *Service) cleanupDeletedEnterprise(ctx context.Context, enterprise *android.Enterprise, enterpriseID string) {
-	// Clean up proxy database records by calling proxy DELETE endpoint
-	// This ensures the proxy won't return conflicts when creating new signup URLs
-	if deleteErr := svc.androidAPIClient.EnterpriseDelete(ctx, enterprise.Name()); deleteErr != nil {
-		svc.logger.WarnContext(ctx, "failed to delete proxy records after enterprise deletion (may not exist)", "err", deleteErr)
-	}
-
-	// Delete zero-touch enrollment tokens (they reference the enterprise being deleted)
-	if deleteErr := svc.ds.DeleteZeroTouchEnrollmentTokens(ctx); deleteErr != nil {
-		svc.logger.ErrorContext(ctx, "failed to delete zero-touch enrollment tokens after enterprise deletion", "err", deleteErr)
-	}
-
-	// Delete local enterprise records
-	if deleteErr := svc.ds.DeleteAllEnterprises(ctx); deleteErr != nil {
-		svc.logger.ErrorContext(ctx, "failed to delete local enterprise records after deletion", "err", deleteErr)
-	}
-
-	// Turn off Android MDM
-	if setErr := svc.ds.SetAndroidEnabledAndConfigured(ctx, false); setErr != nil {
-		svc.logger.ErrorContext(ctx, "failed to turn off Android MDM after enterprise deletion", "err", setErr)
-	}
-
-	// Unenroll Android hosts
-	if unenrollErr := svc.ds.BulkSetAndroidHostsUnenrolled(ctx); unenrollErr != nil {
-		svc.logger.ErrorContext(ctx, "failed to unenroll Android hosts after enterprise deletion", "err", unenrollErr)
-	}
-
-	if err := svc.ds.MarkAllPendingAndroidVPPInstallsAsFailed(ctx); err != nil {
-		svc.logger.ErrorContext(ctx, "failed to mark pending Android VPP installs as failed after enterprise deletion", "err", err)
-	}
 }
 
 // UnenrollAndroidHost calls AMAPI to delete the device (work profile).

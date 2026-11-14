@@ -1195,35 +1195,6 @@ const hostMDMJoin = `
   LEFT JOIN host_dep_assignments hdep ON hdep.host_id = h.id
   `
 
-func amountEnrolledHostsByOSDB(ctx context.Context, db sqlx.QueryerContext) (byOS map[string][]fleet.HostsCountByOSVersion, totalCount int, err error) {
-	var hostsByOS []struct {
-		Platform  string `db:"platform"`
-		OSVersion string `db:"os_version"`
-		NumHosts  int    `db:"num_hosts"`
-	}
-
-	const stmt = `
-    SELECT platform, os_version, count(*) as num_hosts
-    FROM hosts
-    GROUP BY platform, os_version
-  `
-	if err := sqlx.SelectContext(ctx, db, &hostsByOS, stmt); err != nil {
-		return nil, 0, err
-	}
-
-	byOS = make(map[string][]fleet.HostsCountByOSVersion)
-	for _, h := range hostsByOS {
-		totalCount += h.NumHosts
-		byVersion := byOS[h.Platform]
-		byVersion = append(byVersion, fleet.HostsCountByOSVersion{
-			Version:     h.OSVersion,
-			NumEnrolled: h.NumHosts,
-		})
-		byOS[h.Platform] = byVersion
-	}
-	return byOS, totalCount, nil
-}
-
 func (ds *Datastore) ListHosts(ctx context.Context, filter fleet.TeamFilter, opt fleet.HostListOptions) ([]*fleet.Host, error) {
 	sql := `SELECT
     h.id,
@@ -7321,60 +7292,6 @@ WHERE
 		logger.InfoContext(ctx, fmt.Sprintf("hosts detected that are not responding distributed queries %v", ids))
 	}
 	return len(ids), nil
-}
-
-func amountHostsByOrbitVersionDB(ctx context.Context, db sqlx.QueryerContext) ([]fleet.HostsCountByOrbitVersion, error) {
-	counts := make([]fleet.HostsCountByOrbitVersion, 0)
-
-	const stmt = `
-		SELECT version as orbit_version, count(*) as num_hosts
-		FROM host_orbit_info
-		GROUP BY version
-  	`
-	if err := sqlx.SelectContext(ctx, db, &counts, stmt); err != nil {
-		return nil, err
-	}
-
-	return counts, nil
-}
-
-func amountHostsByOsqueryVersionDB(ctx context.Context, db sqlx.QueryerContext) ([]fleet.HostsCountByOsqueryVersion, error) {
-	counts := make([]fleet.HostsCountByOsqueryVersion, 0)
-
-	const stmt = `
-		SELECT osquery_version, count(*) as num_hosts
-		FROM hosts
-		GROUP BY osquery_version
-  	`
-	if err := sqlx.SelectContext(ctx, db, &counts, stmt); err != nil {
-		return nil, err
-	}
-
-	return counts, nil
-}
-
-func numHostsFleetDesktopEnabledDB(ctx context.Context, db sqlx.QueryerContext) (int, error) {
-	var count int
-	const stmt = `
-		SELECT count(*) FROM host_orbit_info WHERE desktop_version IS NOT NULL
-  	`
-	if err := sqlx.GetContext(ctx, db, &count, stmt); err != nil {
-		return 0, err
-	}
-
-	return count, nil
-}
-
-func numHostsABMPendingDB(ctx context.Context, db sqlx.QueryerContext) (int, error) {
-	var count int
-	const stmt = `
-SELECT COUNT(*) FROM hosts h LEFT JOIN host_mdm hmdm ON h.id=hmdm.host_id WHERE h.platform IN ('darwin', 'ios', 'ipados') AND hmdm.enrollment_status = 'Pending';
-  	`
-	if err := sqlx.GetContext(ctx, db, &count, stmt); err != nil {
-		return 0, err
-	}
-
-	return count, nil
 }
 
 // numHostsFleetMDMEnrolledDB returns the number of macOS and Windows hosts that are currently enrolled in Fleet's own

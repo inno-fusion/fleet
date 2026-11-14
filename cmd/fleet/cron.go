@@ -13,7 +13,6 @@ import (
 
 	eeservice "github.com/fleetdm/fleet/v4/ee/server/service"
 	eewebhooks "github.com/fleetdm/fleet/v4/ee/server/webhooks"
-	"github.com/fleetdm/fleet/v4/server"
 	activity_api "github.com/fleetdm/fleet/v4/server/activity/api"
 	chart_api "github.com/fleetdm/fleet/v4/server/chart/api"
 	"github.com/fleetdm/fleet/v4/server/config"
@@ -1526,12 +1525,6 @@ func newCleanupsAndAggregationSchedule(
 			},
 		),
 		schedule.WithJob(
-			"increment_policy_violation_days",
-			func(ctx context.Context) error {
-				return ds.IncrementPolicyViolationDays(ctx)
-			},
-		),
-		schedule.WithJob(
 			"update_os_versions",
 			func(ctx context.Context) error {
 				return ds.UpdateOSVersions(ctx)
@@ -2115,9 +2108,7 @@ func newUsageStatisticsSchedule(ctx context.Context, instanceID string, ds fleet
 		schedule.WithJob(
 			"try_send_statistics",
 			func(ctx context.Context) error {
-				// NOTE(mna): this is not a route from the fleet server (not in server/service/handler.go) so it
-				// will not automatically support the /latest/ versioning. Leaving it as /v1/ for that reason.
-				return trySendStatistics(ctx, ds, fleet.StatisticsFrequency, "https://fleetdm.com/api/v1/webhooks/receive-usage-analytics", config, logger)
+				return trySendStatistics(ctx, ds, fleet.StatisticsFrequency, "", config, logger)
 			},
 		),
 	)
@@ -2125,34 +2116,10 @@ func newUsageStatisticsSchedule(ctx context.Context, instanceID string, ds fleet
 	return s, nil
 }
 
-func trySendStatistics(ctx context.Context, ds fleet.Datastore, frequency time.Duration, url string, config config.FleetConfig, logger *slog.Logger) error {
-	ac, err := ds.AppConfig(ctx)
-	if err != nil {
-		return err
-	}
-
-	// If the license is Premium, we should always send usage statisics.
-	if !ac.ServerSettings.EnableAnalytics && license.IsAllowDisableTelemetry(ctx) {
-		return nil
-	}
-
-	stats, shouldSend, err := ds.ShouldSendStatistics(ctx, frequency, config)
-	if err != nil {
-		return err
-	}
-	if !shouldSend {
-		return nil
-	}
-
-	if err := server.PostJSONWithTimeout(ctx, url, stats, logger); err != nil {
-		return err
-	}
-
-	if err := ds.CleanupStatistics(ctx); err != nil {
-		return err
-	}
-
-	return ds.RecordStatisticsSent(ctx)
+func trySendStatistics(_ context.Context, _ fleet.Datastore, _ time.Duration, _ string, _ config.FleetConfig, _ *slog.Logger) error {
+	// Product analytics are permanently disabled, including on upgraded instances
+	// with stale opt-in settings or Premium licenses. Do not collect a payload.
+	return nil
 }
 
 // newAppleMDMDEPProfileAssigner creates the schedule to run the DEP syncer+assigner.
@@ -2290,6 +2257,7 @@ func newAndroidMDMProfileManagerSchedule(
 	ds fleet.Datastore,
 	logger *slog.Logger,
 	licenseKey string,
+	mdmConfig config.MDMConfig,
 	androidAgentConfig config.AndroidAgentConfig,
 	batchSize int,
 	redisPool fleet.RedisPool,
@@ -2305,7 +2273,7 @@ func newAndroidMDMProfileManagerSchedule(
 		ctx, name, instanceID, defaultInterval, ds, ds,
 		schedule.WithLogger(logger),
 		schedule.WithJob("manage_android_profiles", func(ctx context.Context) error {
-			return android_svc.ReconcileProfiles(ctx, ds, logger, licenseKey, androidAgentConfig, batchSize, retryCounter)
+			return android_svc.ReconcileProfiles(ctx, ds, logger, licenseKey, mdmConfig, androidAgentConfig, batchSize, retryCounter)
 		}),
 	)
 
@@ -2995,6 +2963,7 @@ func newAndroidMDMDeviceReconcilerSchedule(
 	ds fleet.Datastore,
 	logger *slog.Logger,
 	licenseKey string,
+	mdmConfig config.MDMConfig,
 	newActivityFn fleet.NewActivityFunc,
 ) (*schedule.Schedule, error) {
 	const (
@@ -3007,7 +2976,7 @@ func newAndroidMDMDeviceReconcilerSchedule(
 		ctx, name, instanceID, defaultInterval, ds, ds,
 		schedule.WithLogger(logger),
 		schedule.WithJob("reconcile_android_devices", func(ctx context.Context) error {
-			return android_svc.ReconcileAndroidDevices(ctx, ds, logger, licenseKey, newActivityFn)
+			return android_svc.ReconcileAndroidDevices(ctx, ds, logger, licenseKey, mdmConfig, newActivityFn)
 		}),
 	)
 
@@ -3023,6 +2992,7 @@ func newAndroidMDMCommandReconcilerSchedule(
 	ds fleet.Datastore,
 	logger *slog.Logger,
 	licenseKey string,
+	mdmConfig config.MDMConfig,
 	newActivityFn fleet.NewActivityFunc,
 ) (*schedule.Schedule, error) {
 	const (
@@ -3037,7 +3007,7 @@ func newAndroidMDMCommandReconcilerSchedule(
 		ctx, name, instanceID, defaultInterval, ds, ds,
 		schedule.WithLogger(logger),
 		schedule.WithJob("reconcile_android_commands", func(ctx context.Context) error {
-			return android_svc.ReconcileAndroidCommands(ctx, ds, logger, licenseKey, newActivityFn)
+			return android_svc.ReconcileAndroidCommands(ctx, ds, logger, licenseKey, mdmConfig, newActivityFn)
 		}),
 	)
 

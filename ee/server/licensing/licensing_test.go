@@ -18,7 +18,7 @@ func TestLoadPublicKey(t *testing.T) {
 }
 
 func TestLoadLicense(t *testing.T) {
-	t.Parallel()
+	t.Setenv(LocalResearchEnv, "false")
 
 	key := "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJGbGVldCBEZXZpY2UgTWFuYWdlbWVudCBJbmMuIiwiZXhwIjoxNjQxMDEzMjAwLCJzdWIiOiJEZXYgbGljZW5zZSIsImRldmljZXMiOjEwMCwibm90ZSI6ImZvciBkZXZlbG9wbWVudCBvbmx5IiwidGllciI6InByZW1pdW0iLCJpYXQiOjE2MzA0MjE2MTh9.KwTeOvr5FE-9yEyVmugEyMyGPG43t_VqIx5dJzI0zlG3t5FoFQUHSePBafzlhXuyH_u5NJnL0RsrHU21nUY8kg"
 	license, err := LoadLicense(key)
@@ -38,7 +38,7 @@ func TestLoadLicense(t *testing.T) {
 }
 
 func TestLoadBasicLicense(t *testing.T) {
-	t.Parallel()
+	t.Setenv(LocalResearchEnv, "false")
 
 	key := "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJGbGVldCBEZXZpY2UgTWFuYWdlbWVudCBJbmMuIiwiZXhwIjoxNjQwOTk1MjAwLCJzdWIiOiJkZXZlbG9wbWVudCIsImRldmljZXMiOjEwMCwibm90ZSI6ImZvciBkZXZlbG9wbWVudCBvbmx5IiwidGllciI6ImJhc2ljIiwiaWF0IjoxNjIyNDI2NTg2fQ.WmZ0kG4seW3IrNvULCHUPBSfFdqj38A_eiXdV_DFunMHechjHbkwtfkf1J6JQJoDyqn8raXpgbdhafDwv3rmDw"
 	license, err := LoadLicense(key)
@@ -51,7 +51,7 @@ func TestLoadBasicLicense(t *testing.T) {
 }
 
 func TestLoadLicenseExpired(t *testing.T) {
-	t.Parallel()
+	t.Setenv(LocalResearchEnv, "false")
 
 	key := "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJGbGVldCBEZXZpY2UgTWFuYWdlbWVudCBJbmMuIiwiZXhwIjoxNjA5NDU5MjAwLCJzdWIiOiJkZXZlbG9wbWVudCIsImRldmljZXMiOjQyLCJ0aWVyIjoiYmFzaWMiLCJpYXQiOjE2MjI0Mjk1MTB9.pvmgQ2_6GWbGcdlm3JbNTbxFF8V6-xs2pC6zO8P96TF806W0y1TjF5G2ZjzEWCkNMk3dydaRoMHIzE7WgCaK5w"
 	_, err := LoadLicense(key)
@@ -59,7 +59,7 @@ func TestLoadLicenseExpired(t *testing.T) {
 }
 
 func TestLoadLicenseNotIssuedYet(t *testing.T) {
-	t.Parallel()
+	t.Setenv(LocalResearchEnv, "false")
 
 	// iat (issued at) is in the year 2480
 	key := "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJGbGVldCBEZXZpY2UgTWFuYWdlbWVudCBJbmMuIiwiZXhwIjoxNjA5NDU5MjAwLCJzdWIiOiJkZXZlbG9wbWVudCIsImRldmljZXMiOjQyLCJ0aWVyIjoiYmFzaWMiLCJpYXQiOjE2MDk0NTkyMDAwfQ.3UCxwT-kbm8OBIBylI9wXq4yStcVLaB3tYQvkmK8VNL7NQ-GrW4pjx8Ie3gS21Ub4iJtfFmessoC9lMKF5i5gw"
@@ -68,7 +68,7 @@ func TestLoadLicenseNotIssuedYet(t *testing.T) {
 }
 
 func TestLoadLicenseSignatureError(t *testing.T) {
-	t.Parallel()
+	t.Setenv(LocalResearchEnv, "false")
 
 	// signature doesn't match
 	key := "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJGbGVldCBEZXZpY2UgTWFuYWdlbWVudCBJbmMuIiwiZXhwIjoxNjA5NDU5MjAwLCJzdWIiOiJkZXZlbG9wbWVudCIsImRmdmljZXMiOjQyLCJ0aWVyIjoiYmFzaWMiLCJpYXQiOjE2MjI0Mjk1MTB9.pvmgQ2_6GWbGcdlm3JbNTbxFF8V6-xs2pC6zO8P96TF806W0y1TjF5G2ZjzEWCkNMk3dydaRoMHIzE7WgCaK5w"
@@ -77,7 +77,7 @@ func TestLoadLicenseSignatureError(t *testing.T) {
 }
 
 func TestLoadLicenseIncorrectAlgorithm(t *testing.T) {
-	t.Parallel()
+	t.Setenv(LocalResearchEnv, "false")
 
 	// signature doesn't match
 	key := "eyJhbGciOiJFUzM4NCIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJGbGVldCBEZXZpY2UgTWFuYWdlbWVudCBJbmMuIiwiZXhwIjoxNjA5NDU5MjAwLCJzdWIiOiJkZXZlbG9wbWVudCIsImRldmljZXMiOjQyLCJ0aWVyIjoiYmFzaWMiLCJpYXQiOjE2MDk0NTkyMDB9.AAAAAAAAAAAAAAAAAAAAAPi2EbMBWwhCQnCDGptBsE6E1wa4Ql42xOfuWKDzx7v-AAAAAAAAAAAAAAAAAAAAAHmQCJSjvujpV9QpY9d86v4-_OvaTnttE_ry3Xxeua84"
@@ -86,7 +86,7 @@ func TestLoadLicenseIncorrectAlgorithm(t *testing.T) {
 }
 
 func TestLoadLicenseTrialTier(t *testing.T) {
-	t.Parallel()
+	t.Setenv(LocalResearchEnv, "false")
 
 	key := "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJGbGVldCBEZXZpY2UgTWFuYWdlbWVudCBJbmMuIiwiZXhwIjoxNjQwOTk1MjAwLCJzdWIiOiJ0ZXN0IiwiZGV2aWNlcyI6MTAwLCJub3RlIjoiZm9yIGRldmVsb3BtZW50IG9ubHkiLCJ0aWVyIjoidHJpYWwiLCJpYXQiOjE2Nzc1NTMwMzh9.q1lJeGSbeeQhMYwnQb4l3-kh3GFGlAAv-yHzxKhFRmK3vMpgwwyYaieo-hLxfFdCIjts2xd84Ql4q8e9-ixkUg"
 	license, err := LoadLicense(key)
@@ -96,7 +96,7 @@ func TestLoadLicenseTrialTier(t *testing.T) {
 }
 
 func TestForceUpgrade(t *testing.T) {
-	t.Parallel()
+	t.Setenv(LocalResearchEnv, "false")
 	// tier = basic
 	key := "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJGbGVldCBEZXZpY2UgTWFuYWdlbWVudCBJbmMuIiwiZXhwIjoxNjQwOTk1MjAwLCJzdWIiOiJ0ZXN0IiwiZGV2aWNlcyI6MTAwLCJub3RlIjoiZm9yIGRldmVsb3BtZW50IG9ubHkiLCJ0aWVyIjoiYmFzaWMiLCJpYXQiOjE2Nzc3ODkzMjZ9.DOQ5AGHthInA3pGv6U4xf3PGdGZCRTkbkn96g45PPEvpUN0LwNMOc8FL-wWowZ2rp5yvqmKlb_gzkAh7jkhz8g"
 	license, err := LoadLicense(key)

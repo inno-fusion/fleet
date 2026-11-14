@@ -20,6 +20,7 @@ import {
   ROLE_VARIOUS,
   tooltipTextWithLineBreaks,
 } from "utilities/helpers";
+import { isResearchLicense } from "utilities/license";
 import { getThemeMode, setThemeMode, ThemeMode } from "utilities/theme";
 
 interface IAccountSidePanelProps {
@@ -96,11 +97,6 @@ const AccountSidePanel = ({
     <div className={baseClass}>
       <div className={`${baseClass}__change-avatar`}>
         <Avatar user={currentUser} className={`${baseClass}__avatar`} />
-        <CustomLink
-          url="https://en.gravatar.com/emails/"
-          text="Change photo at Gravatar"
-          newTab
-        />
       </div>
       <div
         className={`${baseClass}__theme-picker`}
@@ -180,8 +176,16 @@ const AccountSidePanel = ({
       />
       {isPremiumTier && config && (
         <DataSet
-          title="License expiration date"
-          value={readableDate(config.license.expiration)}
+          title={
+            isResearchLicense(config.license)
+              ? "Feature entitlement"
+              : "License expiration date"
+          }
+          value={
+            isResearchLicense(config.license)
+              ? "Local research (development/testing only, no expiration)"
+              : readableDate(config.license.expiration)
+          }
         />
       )}
       <DataSet

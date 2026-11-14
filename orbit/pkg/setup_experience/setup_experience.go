@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/fleetdm/fleet/v4/orbit/pkg/constant"
+	"github.com/fleetdm/fleet/v4/orbit/pkg/dialogassets"
 	"github.com/fleetdm/fleet/v4/orbit/pkg/swiftdialog"
 	"github.com/fleetdm/fleet/v4/orbit/pkg/token"
 	"github.com/fleetdm/fleet/v4/orbit/pkg/update"
@@ -109,9 +110,6 @@ func (s *SetupExperiencer) Run(oc *fleet.OrbitConfig) error {
 		log.Debug().Msgf("setup experience payload: %s", string(payloadBytes))
 	}
 	orgLogo := payload.OrgLogoURL
-	if orgLogo == "" {
-		orgLogo = "https://fleetdm.com/images/permanent/fleet-mark-color-40x40@4x.png"
-	}
 
 	// Determine whether we should start directly with the webview UI or show the UI for waiting on the
 	// bootstrap package, configuration profiles, and account configuration to complete first. We
@@ -298,7 +296,12 @@ func (s *SetupExperiencer) startSwiftDialog(binaryPath, orgLogo string, startWit
 
 		if !startWithWebview {
 			initOpts.Message = "### Setting up your Mac...\n\nYour Mac is being configured by your organization using Fleet. This process may take some time to complete. Please don't attempt to restart or shut down the computer unless prompted to do so."
-			initOpts.Icon = orgLogo
+			icon, iconSize, err := dialogassets.Icon(orgLogo)
+			if err != nil {
+				log.Error().Err(err).Msg("setup experience: getting icon size")
+			}
+			initOpts.Icon = icon
+			initOpts.IconSize = iconSize
 		}
 
 		if err := s.sd.Start(context.Background(), initOpts, true); err != nil {
@@ -307,16 +310,6 @@ func (s *SetupExperiencer) startSwiftDialog(binaryPath, orgLogo string, startWit
 		if !startWithWebview {
 			if err = s.sd.ShowProgress(); err != nil {
 				log.Error().Err(err).Msg("setting initial setup experience progress")
-			}
-
-			iconSize, err := swiftdialog.GetIconSize(orgLogo)
-			if err != nil {
-				log.Error().Err(err).Msg("setup experience: getting icon size")
-				iconSize = swiftdialog.DefaultIconSize
-			}
-
-			if err := s.sd.SetIconSize(iconSize); err != nil {
-				log.Error().Err(err).Msg("setting initial setup experience icon size")
 			}
 		}
 
@@ -457,9 +450,6 @@ func (s *SetupExperiencer) RunLegacy(oc *fleet.OrbitConfig) error {
 
 	// If swiftDialog isn't up yet, then launch it
 	orgLogo := payload.OrgLogoURL
-	if orgLogo == "" {
-		orgLogo = "https://fleetdm.com/images/permanent/fleet-mark-color-40x40@4x.png"
-	}
 
 	if err := s.startSwiftDialogLegacy(binaryPath, orgLogo); err != nil {
 		return err
@@ -644,17 +634,17 @@ func (s *SetupExperiencer) startSwiftDialogLegacy(binaryPath, orgLogo string) er
 	}
 	s.sd = swiftDialog
 
-	iconSize, err := swiftdialog.GetIconSize(orgLogo)
+	icon, iconSize, err := dialogassets.Icon(orgLogo)
 	if err != nil {
 		log.Error().Err(err).Msg("setup experience: getting icon size")
-		iconSize = swiftdialog.DefaultIconSize
 	}
 
 	go func() {
 		initOpts := &swiftdialog.SwiftDialogOptions{
 			Title:            "none",
 			Message:          "### Setting up your Mac...\n\nYour Mac is being configured by your organization using Fleet. This process may take some time to complete. Please don't attempt to restart or shut down the computer unless prompted to do so.",
-			Icon:             orgLogo,
+			Icon:             icon,
+			IconSize:         iconSize,
 			MessageAlignment: swiftdialog.AlignmentCenter,
 			CentreIcon:       true,
 			Height:           "625",
@@ -673,10 +663,6 @@ func (s *SetupExperiencer) startSwiftDialogLegacy(binaryPath, orgLogo string) er
 
 		if err = s.sd.ShowProgress(); err != nil {
 			log.Error().Err(err).Msg("setting initial setup experience progress")
-		}
-
-		if err := s.sd.SetIconSize(iconSize); err != nil {
-			log.Error().Err(err).Msg("setting initial setup experience icon size")
 		}
 
 		log.Debug().Msg("swiftDialog process started")
