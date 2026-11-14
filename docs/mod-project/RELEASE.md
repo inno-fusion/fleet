@@ -34,10 +34,9 @@ available. This is not an air-gapped build.
 ## Reproduce server and CLI assets
 
 On a clean macOS checkout with repository-supported Go/Node, Yarn, Zig, Xcode
-command-line tools, and locked dependencies installed:
+command-line tools:
 
 ```bash
-yarn install --frozen-lockfile --non-interactive
 python3 tools/mod-project/build-release.py --version 4.94.1 --output "$HOME/fleet-release-output"
 docker buildx build --platform linux/arm64,linux/amd64 \
   --build-arg RELEASE_VERSION=4.94.1-mod \
@@ -52,6 +51,12 @@ substitute `CGO_ENABLED=0` just because that binary compiles. Fleet's vulnerabil
 queries use SQLite at runtime. Zig supplies architecture-matched C toolchains.
 The native client components have their own upstream versions, separate from
 Fleet server's 4.94.1. Do not stamp Orbit/Desktop with the server version.
+
+The builder creates a fresh detached worktree at the committed source revision,
+installs locked dependencies there, and regenerates all dashboard/bindata assets.
+It never embeds caller-side untracked/ignored files or resumes arbitrary existing
+generated assets. Every binary must report the exact clean VCS revision and target
+build flags before packaging. The temporary source worktree is removed afterward.
 
 ## Apple components and installation boundary
 

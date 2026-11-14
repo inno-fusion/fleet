@@ -18,6 +18,28 @@ BUILDER = SimpleNamespace(**runpy.run_path(str(Path(__file__).with_name("build-r
 
 
 class ReleaseBuilderTests(unittest.TestCase):
+    def test_isolated_source_excludes_untracked_and_ignored_assets(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            subprocess.run(["git", "init", "--quiet", str(root)], check=True)
+            (root / "assets").mkdir()
+            (root / "assets/committed.txt").write_text("committed")
+            (root / ".gitignore").write_text("assets/ignored.js\n")
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            subprocess.run(["git", "-C", str(root), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                            "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "fixture"], check=True)
+            revision = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
+            (root / "assets/secret.txt").write_text("must not ship")
+            (root / "assets/ignored.js").write_text("stale development bundle")
+            with patch.dict(BUILDER.isolated_source.__wrapped__.__globals__, ROOT=root):
+                with BUILDER.isolated_source(revision) as source:
+                    self.assertEqual((source / "assets/committed.txt").read_text(), "committed")
+                    self.assertFalse((source / "assets/secret.txt").exists())
+                    self.assertFalse((source / "assets/ignored.js").exists())
+                    self.assertEqual(subprocess.check_output(["git", "status", "--porcelain"], cwd=source), b"")
+                self.assertFalse(source.exists())
+            self.assertEqual((root / "assets/secret.txt").read_text(), "must not ship")
+
     def test_cli_verification_uses_global_version_flag(self):
         with patch.dict(BUILDER.verify_cli.__globals__, run=Mock()) as scope:
             BUILDER.verify_cli(Path("fleetctl"))
