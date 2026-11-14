@@ -2,9 +2,9 @@ name: Mod project verification
 
 on:
   push:
-    branches: [mod-project]
+    branches: [mod-project, 'v[0-9]*']
   pull_request:
-    branches: [mod-project]
+    branches: [mod-project, 'v[0-9]*']
 
 permissions:
   contents: read

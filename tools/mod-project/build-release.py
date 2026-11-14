@@ -21,6 +21,21 @@ def run(*args, env=None):
     subprocess.run(list(map(str, args)), cwd=ROOT, env=env, check=True, stdin=subprocess.DEVNULL)
 
 
+def verify_build_info(binary, revision, system, arch, server):
+    info = subprocess.check_output(["go", "version", "-m", str(binary)], cwd=ROOT, text=True)
+    expected = ["vcs.revision=" + revision, "vcs.modified=false", "GOOS=" + system,
+                "GOARCH=" + arch, "CGO_ENABLED=" + ("1" if server else "0")]
+    if server:
+        expected.append("-tags=full,fts5,netgo")
+    for field in expected:
+        if "\tbuild\t" + field + "\n" not in info:
+            raise RuntimeError("Unexpected build provenance for " + str(binary) + ": missing " + field)
+
+
+def verify_cli(binary):
+    run(binary, "--version")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True)
@@ -71,6 +86,7 @@ def main():
                 tags = ["-tags", "full,fts5,netgo"]
             run("go", "build", "-trimpath", *tags, "-ldflags", flags, "-o", binary,
                 "./cmd/" + name, env=target_env)
+            verify_build_info(binary, revision, system, arch, name == "fleet")
             if system == "darwin":
                 continue
             label = name + "_v" + args.version + "_" + system + "_" + arch
@@ -81,7 +97,7 @@ def main():
         "-output", universal)
     run("codesign", "--force", "--sign", "-", universal)
     run("codesign", "--verify", "--strict", universal)
-    run(universal, "version", "--full")
+    verify_cli(universal)
     make_archive(output, "fleetctl_v" + args.version + "_macos_universal", universal, False)
     make_archive(output, "fleetctl_v" + args.version + "_macos_universal", universal, True)
     licenses = output / "licenses"
