@@ -5,6 +5,7 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha1" //nolint:gosec // only verifies Apple Root CA's SHA-1 self-signature
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
@@ -73,8 +74,8 @@ func SignAPNSCSRLocally(csr *x509.CertificateRequest, certPath, keyPath, chainPa
 	if time.Now().Before(previous.NotBefore) || time.Now().After(previous.NotAfter) {
 		return nil, errors.New("MDM vendor root certificate is expired or not yet valid")
 	}
-	if err := previous.CheckSignatureFrom(previous); err != nil {
-		return nil, errors.New("MDM vendor chain must end with a self-signed root")
+	if err := checkSelfSignedRoot(previous); err != nil {
+		return nil, err
 	}
 	digest := sha256.Sum256(csr.Raw)
 	signature, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, digest[:])
@@ -87,4 +88,31 @@ func SignAPNSCSRLocally(csr *x509.CertificateRequest, certPath, keyPath, chainPa
 		PushCertCertificateChain: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leaf.Raw})) + string(chainPEM),
 	}
 	return request.Encode()
+}
+
+// checkSelfSignedRoot verifies the chain's last certificate signs itself. Apple Root CA,
+// which issues the WWDR intermediates behind MDM vendor certificates, has a SHA-1
+// self-signature that x509.CheckSignatureFrom always rejects, so SHA-1 is verified directly.
+func checkSelfSignedRoot(root *x509.Certificate) error {
+	errNotSelfSigned := errors.New("MDM vendor chain must end with a self-signed root")
+	if !bytes.Equal(root.RawIssuer, root.RawSubject) {
+		return errNotSelfSigned
+	}
+	err := root.CheckSignatureFrom(root)
+	if err == nil {
+		return nil
+	}
+	var insecure x509.InsecureAlgorithmError
+	if !errors.As(err, &insecure) || root.SignatureAlgorithm != x509.SHA1WithRSA || !root.IsCA {
+		return errNotSelfSigned
+	}
+	pub, ok := root.PublicKey.(*rsa.PublicKey)
+	if !ok {
+		return errNotSelfSigned
+	}
+	digest := sha1.Sum(root.RawTBSCertificate) //nolint:gosec // see import comment
+	if err := rsa.VerifyPKCS1v15(pub, crypto.SHA1, digest[:], root.Signature); err != nil {
+		return errNotSelfSigned
+	}
+	return nil
 }
