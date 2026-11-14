@@ -67,6 +67,8 @@ jobs:
         run: >-
           yarn test --runInBand --watch=false
           --testPathPattern='Statistics|permissions|utilities/license|MainContent|DeviceUserPage|AccountSidePanel|context/app|AuthenticatedRoutes|LoginPage|Avatar|utilities/helpers|components/App'
+      - name: Release archive and argument regressions
+        run: python3 tools/mod-project/test_build_release.py -v
       - name: Type check
         run: yarn tsc --noEmit
       - name: Build versioned dashboard and server
