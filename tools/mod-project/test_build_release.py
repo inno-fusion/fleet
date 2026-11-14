@@ -9,6 +9,7 @@ import tarfile
 import tempfile
 import unittest
 import zipfile
+from unittest.mock import Mock, patch
 
 import runpy
 from types import SimpleNamespace
@@ -17,6 +18,22 @@ BUILDER = SimpleNamespace(**runpy.run_path(str(Path(__file__).with_name("build-r
 
 
 class ReleaseBuilderTests(unittest.TestCase):
+    def test_cli_verification_uses_global_version_flag(self):
+        with patch.dict(BUILDER.verify_cli.__globals__, run=Mock()) as scope:
+            BUILDER.verify_cli(Path("fleetctl"))
+            scope["run"].assert_called_once_with(Path("fleetctl"), "--version")
+
+    def test_server_provenance_requires_clean_revision_and_cgo_fts5(self):
+        fields = ["vcs.revision=fixture", "vcs.modified=false", "GOOS=linux", "GOARCH=arm64",
+                  "CGO_ENABLED=1", "-tags=full,fts5,netgo"]
+        info = "".join("\tbuild\t" + field + "\n" for field in fields)
+        with patch("subprocess.check_output", return_value=info):
+            BUILDER.verify_build_info(Path("fleet"), "fixture", "linux", "arm64", True)
+        for field in fields:
+            with self.subTest(missing=field), patch("subprocess.check_output", return_value=info.replace(field, "invalid")):
+                with self.assertRaises(RuntimeError):
+                    BUILDER.verify_build_info(Path("fleet"), "fixture", "linux", "arm64", True)
+
     def test_archives_include_original_license_texts(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
