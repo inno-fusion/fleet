@@ -47,6 +47,7 @@ yarn test --runInBand --watch=false \
   --testPathPattern='Statistics|permissions|utilities/license|MainContent|DeviceUserPage|AccountSidePanel|context/app|AuthenticatedRoutes|LoginPage|Avatar|utilities/helpers|components/App'
 yarn tsc --noEmit
 bash tools/mod-project/build.sh
+python3 tools/mod-project/test_smoke_env.py -v
 yarn playwright install chromium
 FLEET_MOD_BROWSER_SMOKE=1 bash tools/mod-project/run-smoke.sh research
 bash tools/mod-project/run-smoke.sh free
@@ -59,6 +60,12 @@ at production. It runs the built server on loopback, generates disposable local
 users, removes the temporary secret config and browser credentials, terminates
 the server on exit, and prints the retained diagnostic log directory. It refuses
 an occupied HTTP port. `FLEET_MOD_SMOKE_PORT` overrides the loopback HTTP port.
+Both migration and server subprocesses discard inherited `FLEET_*` configuration
+and explicitly set only the selected tier and an empty signed-license key. They
+also replace stdin with `/dev/null`: Fleet otherwise interprets piped input as
+additional CLI flags, which outrank YAML and can retarget database migrations. The
+wrapper retains the parent shell's smoke/Compose settings for orchestration;
+they cannot override Fleet's generated database, Redis, or listener settings.
 External server HTTP fetches are refused during this credential-free test; this
 is not an integration test of those services. Browser smoke records and rejects
 all attempted external HTTP requests on the exercised default app routes.
@@ -118,6 +125,14 @@ Post-correction verification:
 - TypeScript, shell syntax, JavaScript syntax, actionlint, `go vet` on affected
   backend/agent packages, and diff hygiene passed. Scoped frontend ESLint passed
   with no errors and ten existing warnings.
+- Late independent audit reproduced an inherited-environment override of the
+  smoke database with `config_dump` (no non-disposable database was migrated).
+  A follow-up fix isolates Fleet subprocess environments and stdin. Five new
+  regression tests pass, including the real built binary's resolved database/
+  listeners, injected CLI flags, open input pipes, and closed stdin. The piped
+  argument regression failed before stdin isolation and passed after the fix.
+  Research/free HTTP and research browser smoke then passed with deliberately
+  invalid inherited MySQL, Redis, server, license, and Android proxy settings.
 
 Test counts include subtests and selected overlapping coverage; do not add them
 into a unique-test total. Build metadata correctly reports dirty until the
@@ -145,16 +160,18 @@ smoke and is not Fleet product analytics. The fork is not air-gapped.
 
 ## Reapply to upstream
 
-The branch is intended to contain one complete custom commit directly above the
-recorded upstream base. Keep code, regressions, build/CI and this documentation in
-that commit so the change is portable.
+The branch contains the complete feature commit followed by a smoke-isolation
+correction. The correction was discovered after publication, so published history
+was not rewritten. Replay the full ordered range above the recorded upstream
+base, not just the branch tip. Keep code, regressions, build/CI and documentation
+together when consolidating the patch for a later release.
 
 ```bash
 git fetch origin mod-project
-patch_commit=$(git rev-parse origin/mod-project)
+base=7e7d17b75abd7a81f8320ca75531b47f0933bc1b
 # Fetch/verify a specific new stable upstream tag separately.
 git switch -c mod-project-next VERIFIED_UPSTREAM_TAG
-git cherry-pick "$patch_commit"
+git cherry-pick "$base..origin/mod-project"
 ```
 
 A clean cherry-pick is not proof of compatibility. Resolve conflicts by intent,
@@ -164,9 +181,9 @@ analytics collection/upload/config coercion, and unsolicited browser defaults.
 Preserve genuine remote authorization, user-configured integrations, and RBAC.
 Review security/dependency changes in the new release independently.
 
-For exact-baseline replay verification, apply the custom commit to a disposable
+For exact-baseline replay verification, apply the full range to a disposable
 worktree at the recorded base with `git cherry-pick --no-commit`, then compare
-`git write-tree` with the custom commit's tree. Remove only that disposable
+`git write-tree` with the branch tip's tree. Remove only that disposable
 worktree after checking equality. Never reset the user's worktree or force-push
 `main`. Push only `refs/heads/mod-project` and verify the remote commit SHA and
 Actions results before reporting publication success.
