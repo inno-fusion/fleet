@@ -2,6 +2,7 @@
 """Build versioned fork server/CLI archives without publishing or embedding secrets."""
 
 import argparse
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -11,6 +12,7 @@ import re
 import shutil
 import subprocess
 import tarfile
+import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -36,11 +38,28 @@ def verify_cli(binary):
     run(binary, "--version")
 
 
+@contextmanager
+def isolated_source(revision):
+    global ROOT
+    original = ROOT
+    with tempfile.TemporaryDirectory(prefix="fleet-release-source-") as temporary:
+        source = Path(temporary) / "source"
+        subprocess.run(["git", "worktree", "add", "--detach", str(source), revision],
+                       cwd=original, check=True, stdin=subprocess.DEVNULL)
+        try:
+            ROOT = source
+            yield source
+        finally:
+            ROOT = original
+            subprocess.run(["git", "worktree", "remove", "--force", str(source)],
+                           cwd=original, check=True, stdin=subprocess.DEVNULL)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--skip-dashboard", action="store_true")
+
     args = parser.parse_args()
     if not re.fullmatch(r"\d+\.\d+\.\d+", args.version):
         parser.error("Version must be an explicit major.minor.patch")
@@ -52,18 +71,24 @@ def main():
     if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=no"], cwd=ROOT, text=True):
         parser.error("Commit tracked source changes before building a release")
     branch = subprocess.check_output(["git", "branch", "--show-current"], cwd=ROOT, text=True).strip()
+    with isolated_source(revision):
+        build_release(args.version, output, revision, branch)
+
+
+def build_release(version, output, revision, branch):
     date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     environment = dict(os.environ)
     environment.setdefault("GOMAXPROCS", "3")
-    environment.setdefault("GOFLAGS", "-p=3")
-    if not args.skip_dashboard:
-        run("yarn", "generate:osquery-sql-parser", env=environment)
-        run("yarn", "webpack", env=dict(environment, NODE_ENV="production"))
-        run("make", "generate-go", env=environment)
+    environment["GOFLAGS"] = "-p=3 -mod=readonly"
+    run("yarn", "install", "--frozen-lockfile", "--non-interactive", env=dict(environment, NODE_ENV="development"))
+    run("yarn", "generate:osquery-sql-parser", env=environment)
+    run("yarn", "webpack", env=dict(environment, NODE_ENV="production"))
+    run("make", "generate-go", env=environment)
     binaries = output / "binaries"
     binaries.mkdir()
-    provenance = {"version": args.version + "-mod", "revision": revision, "branch": branch,
-                  "upstream_version": args.version, "build_date": date, "artifacts": []}
+    provenance = {"version": version + "-mod", "revision": revision, "branch": branch,
+                  "upstream_version": version, "build_date": date, "artifacts": [],
+                  "source_isolation": "fresh detached worktree; locked dependencies; fresh generated assets"}
     for name, targets in (("fleet", [("linux", "arm64"), ("linux", "amd64")]),
                           ("fleetctl", [(system, arch) for system in ("linux", "darwin", "windows")
                                         for arch in ("arm64", "amd64")])):
@@ -71,7 +96,7 @@ def main():
             destination = binaries / (system + "-" + arch)
             destination.mkdir(exist_ok=True)
             binary = destination / (name + (".exe" if system == "windows" else ""))
-            fields = {"appName": name, "version": args.version + "-mod", "branch": branch,
+            fields = {"appName": name, "version": version + "-mod", "branch": branch,
                       "revision": revision, "buildDate": date, "buildUser": "0xMetaLabs"}
             flags = "-s -w " + " ".join("-X github.com/fleetdm/fleet/v4/server/version." + key + "=" + value
                                          for key, value in fields.items())
@@ -79,7 +104,7 @@ def main():
             tags = []
             if name == "fleet":
                 if not shutil.which("zig"):
-                    parser.error("Zig is required for static Linux SQLite/FTS5 server cross-builds")
+                    raise RuntimeError("Zig is required for static Linux SQLite/FTS5 server cross-builds")
                 target = "aarch64" if arch == "arm64" else "x86_64"
                 target_env.update(CGO_ENABLED="1", CC="zig cc -target " + target + "-linux-musl")
                 flags += " -linkmode external -extldflags '-static'"
@@ -89,7 +114,7 @@ def main():
             verify_build_info(binary, revision, system, arch, name == "fleet")
             if system == "darwin":
                 continue
-            label = name + "_v" + args.version + "_" + system + "_" + arch
+            label = name + "_v" + version + "_" + system + "_" + arch
             make_archive(output, label, binary, system == "windows")
     universal = binaries / "darwin-universal" / "fleetctl"
     universal.parent.mkdir()
@@ -98,8 +123,8 @@ def main():
     run("codesign", "--force", "--sign", "-", universal)
     run("codesign", "--verify", "--strict", universal)
     verify_cli(universal)
-    make_archive(output, "fleetctl_v" + args.version + "_macos_universal", universal, False)
-    make_archive(output, "fleetctl_v" + args.version + "_macos_universal", universal, True)
+    make_archive(output, "fleetctl_v" + version + "_macos_universal", universal, False)
+    make_archive(output, "fleetctl_v" + version + "_macos_universal", universal, True)
     licenses = output / "licenses"
     licenses.mkdir()
     shutil.copy2(ROOT / "LICENSE", licenses / "LICENSE")
