@@ -277,6 +277,10 @@ func (svc *Service) AppConfigObfuscated(ctx context.Context) (*fleet.AppConfig, 
 		return nil, err
 	}
 
+	// Report the effective setting without mutating a shared cached config.
+	ac = ac.Copy()
+	ac.ServerSettings.EnableAnalytics = false
+
 	// Mirror deprecated logo URL fields to the new mode-aware fields (and
 	// vice versa) so every read returns a consistent view to clients.
 	// NormalizeLogoFields only errors when both forms are set with
@@ -1082,10 +1086,9 @@ func (svc *Service) ModifyAppConfig(ctx context.Context, p []byte, applyOpts fle
 		}
 	}
 
-	// If the license is Premium, we should always send usage statisics.
-	if !lic.IsAllowDisableTelemetry() {
-		appConfig.ServerSettings.EnableAnalytics = true
-	}
+	// Keep the legacy API field for compatibility, but never persist product
+	// analytics opt-in, including when an unrelated PATCH inherits a stale true.
+	appConfig.ServerSettings.EnableAnalytics = false
 
 	fleet.ValidateGoogleCalendarIntegrations(appConfig.Integrations.GoogleCalendar, invalid)
 	fleet.ValidateGoogleWorkspaceIntegrations(appConfig.Integrations.GoogleWorkspace, invalid)
@@ -1192,6 +1195,8 @@ func (svc *Service) ModifyAppConfig(ctx context.Context, p []byte, applyOpts fle
 		if err != nil {
 			return nil, err
 		}
+		obfuscatedAppConfig = obfuscatedAppConfig.Copy()
+		obfuscatedAppConfig.ServerSettings.EnableAnalytics = false
 		obfuscatedAppConfig.Obfuscate()
 		return obfuscatedAppConfig, nil
 	}

@@ -650,15 +650,6 @@ func (ds *Datastore) TeamEnrollSecrets(ctx context.Context, teamID uint) ([]*fle
 	return secrets, nil
 }
 
-func amountTeamsDB(ctx context.Context, db sqlx.QueryerContext) (int, error) {
-	var amount int
-	err := sqlx.GetContext(ctx, db, &amount, `SELECT count(*) FROM teams`)
-	if err != nil {
-		return 0, err
-	}
-	return amount, nil
-}
-
 // TeamAgentOptions loads the agents options of a team.
 func (ds *Datastore) TeamAgentOptions(ctx context.Context, tid uint) (*json.RawMessage, error) {
 	stmt := fmt.Sprintf(`SELECT config->'$.agent_options' FROM teams WHERE id = %d`, tid) // safe because uint

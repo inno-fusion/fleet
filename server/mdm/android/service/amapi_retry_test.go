@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fleetdm/fleet/v4/server/config"
 	"github.com/fleetdm/fleet/v4/server/dev_mode"
 	"github.com/fleetdm/fleet/v4/server/fleet"
 	"github.com/fleetdm/fleet/v4/server/mdm/android"
@@ -82,7 +83,7 @@ func TestReconcileAndroidDevicesDoesNotRetryTooManyRequests(t *testing.T) {
 	// With retry enabled, the call would still be waiting to retry when this context expires.
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	err := ReconcileAndroidDevices(ctx, ds, slog.New(slog.DiscardHandler), "license", noopNewActivity)
+	err := ReconcileAndroidDevices(ctx, ds, slog.New(slog.DiscardHandler), "license", config.MDMConfig{}, noopNewActivity)
 	require.NotErrorIs(t, err, context.DeadlineExceeded)
 	assert.True(t, androidmgmt.IsTooManyRequestsError(err))
 	assert.EqualValues(t, 1, calls.Load())

@@ -39,8 +39,21 @@ func loadPublicKey() (*ecdsa.PublicKey, error) {
 	return nil, fmt.Errorf("%T is not *ecdsa.PublicKey", pub)
 }
 
-// LoadLicense loads and validates the license key.
+// LoadLicense loads and validates the license key, or the explicitly enabled
+// local development/testing entitlement. Local research never supplies a key
+// that can authenticate to Fleet-hosted services.
 func LoadLicense(licenseKey string) (*fleet.LicenseInfo, error) {
+	research, err := localResearchEnabled()
+	if err != nil {
+		return nil, err
+	}
+	if research {
+		if licenseKey != "" {
+			return nil, fmt.Errorf("%s cannot be combined with a license key", LocalResearchEnv)
+		}
+		return newLocalResearchLicense(), nil
+	}
+
 	// No license key
 	if licenseKey == "" {
 		return &fleet.LicenseInfo{Tier: fleet.TierFree}, nil
@@ -108,6 +121,9 @@ func validate(token *jwt.Token) (*fleet.LicenseInfo, error) {
 
 	if claims.Tier == "" {
 		return nil, errors.New("missing tier")
+	}
+	if claims.Tier == fleet.TierResearch {
+		return nil, errors.New("research tier is reserved for local development and testing")
 	}
 
 	if claims.ExpiresAt == 0 {

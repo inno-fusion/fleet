@@ -1,8 +1,28 @@
 import createMockConfig, { createMockMdmConfig } from "__mocks__/configMock";
+import createMockLicense from "__mocks__/licenseMock";
 import createMockUser from "__mocks__/userMock";
 import { IEndUserAuthentication } from "interfaces/config";
 
 import permissions from ".";
+
+describe("permissions - license features", () => {
+  it.each(["premium", "basic", "trial", "research"])(
+    "exposes Premium features for %s without classifying it as Free",
+    (tier) => {
+      const config = createMockConfig({ license: createMockLicense({ tier }) });
+      expect(permissions.isPremiumTier(config)).toBe(true);
+      expect(permissions.isFreeTier(config)).toBe(false);
+    }
+  );
+
+  it("keeps Free and unknown tiers out of Premium routes", () => {
+    ["free", "unrecognized"].forEach((tier) => {
+      const config = createMockConfig({ license: createMockLicense({ tier }) });
+      expect(permissions.isPremiumTier(config)).toBe(false);
+      expect(permissions.isFreeTier(config)).toBe(tier === "free");
+    });
+  });
+});
 
 describe("permissions - isAdminForAllUserTeams", () => {
   const globalAdmin = createMockUser({ global_role: "admin", teams: [] });

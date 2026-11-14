@@ -870,9 +870,9 @@ func WriteBrowserSecurityHeaders(w http.ResponseWriter, serveCSP, includeNonce b
 	// Referer.
 	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 	if serveCSP {
-		// TODO Is https OK for img-src? We allow customers to upload their own images and we have to reach out to gravatar for others.
+		// HTTPS images remain available for operator-selected branding.
 		// NB: If default-src ever changes from 'none' make sure to add object-src 'none'
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; base-uri 'self'; connect-src 'self' www.gravatar.com ws: wss:; img-src 'self' www.gravatar.com data: https:; style-src 'self'"+nonceExtraParam+"; font-src 'self'; script-src 'self'"+nonceExtraParam)
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; base-uri 'self'; connect-src 'self' ws: wss:; img-src 'self' data: https:; style-src 'self'"+nonceExtraParam+"; font-src 'self'; script-src 'self'"+nonceExtraParam)
 	}
 	return nonce, nil
 }

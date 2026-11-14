@@ -9,6 +9,7 @@ import AppleBMTokenInvalidMessage from "components/MDM/AppleBMTokenInvalidMessag
 import ApplePNCertRenewalMessage from "components/MDM/ApplePNCertRenewalMessage";
 import { AppContext } from "context/app";
 import { hasLicenseExpired } from "utilities/helpers";
+import { isResearchLicense } from "utilities/license";
 
 import MicrosoftGraphCredentialInvalidMessage from "./banners/MicrosoftGraphCredentialInvalidMessage";
 import VppRenewalMessage from "./banners/VppRenewalMessage";
@@ -52,9 +53,9 @@ const MainContent = ({
   } = useContext(AppContext);
 
   const renderAppWideBanner = () => {
-    const isFleetLicenseExpired = hasLicenseExpired(
-      config?.license.expiration || ""
-    );
+    const isFleetLicenseExpired =
+      !isResearchLicense(config?.license) &&
+      hasLicenseExpired(config?.license.expiration || "");
 
     let banner: JSX.Element | null = null;
 

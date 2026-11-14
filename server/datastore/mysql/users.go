@@ -536,23 +536,6 @@ func tableRowsCount(ctx context.Context, db sqlx.QueryerContext, tableName strin
 	return count, nil
 }
 
-func amountActiveUsersSinceDB(ctx context.Context, db sqlx.QueryerContext, since time.Time) (int, error) {
-	var amount int
-	err := sqlx.GetContext(ctx, db, &amount, `
-    SELECT count(*)
-    FROM users u
-    WHERE EXISTS (
-      SELECT 1
-      FROM sessions ssn
-      WHERE ssn.user_id = u.id AND
-      ssn.accessed_at >= ?
-    )`, since)
-	if err != nil {
-		return 0, err
-	}
-	return amount, nil
-}
-
 func (ds *Datastore) UserSettings(ctx context.Context, userID uint) (*fleet.UserSettings, error) {
 	settings := &fleet.UserSettings{}
 	var bytes []byte

@@ -306,9 +306,10 @@ type validationMiddleware struct {
 	ssoSessionStore sso.SessionStore
 }
 
-// getAssetURL simply returns the base url used for retrieving image assets from fleetdm.com.
+// getAssetURL is retained for legacy mailer callers. Transactional emails no
+// longer load external presentation assets.
 func getAssetURL() template.URL {
-	return template.URL("https://fleetdm.com/images/permanent")
+	return ""
 }
 
 // emailLinkBaseURL returns the base URL used to build links in transactional

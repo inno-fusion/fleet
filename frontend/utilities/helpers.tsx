@@ -5,7 +5,6 @@ import {
   isAfter,
   addDays,
 } from "date-fns";
-import md5 from "js-md5";
 import {
   isEmpty,
   flatMap,
@@ -43,10 +42,6 @@ import { ITeam } from "interfaces/team";
 import { UserRole } from "interfaces/user";
 import {
   DEFAULT_EMPTY_CELL_VALUE,
-  DEFAULT_GRAVATAR_LINK,
-  DEFAULT_GRAVATAR_LINK_FALLBACK,
-  DEFAULT_GRAVATAR_LINK_DARK,
-  DEFAULT_GRAVATAR_LINK_DARK_FALLBACK,
   INITIAL_FLEET_DATE,
   PLATFORM_LABEL_DISPLAY_TYPES,
   isPlatformLabelNameFromAPI,
@@ -58,32 +53,32 @@ import { QueryParams, buildQueryStringFromParams } from "utilities/url";
 const ORG_INFO_ATTRS = ["org_name"];
 const ADMIN_ATTRS = ["email", "name", "password", "password_confirmation"];
 
-export const addGravatarUrlToResource = (resource: any): any => {
-  const { email } = resource;
-  const gravatarAvailable =
-    localStorage.getItem("gravatar_available") !== "false"; // Only fallback if explicitly set to "false"
+export const getAvatarUrl = (url?: string): string | undefined => {
+  if (!url) return undefined;
 
-  const emailHash = md5(email.toLowerCase());
-
-  let gravatar_url;
-  let gravatar_url_dark;
-
-  if (gravatarAvailable) {
-    gravatar_url = `https://www.gravatar.com/avatar/${emailHash}?d=${encodeURIComponent(
-      DEFAULT_GRAVATAR_LINK
-    )}&size=200`;
-    gravatar_url_dark = `https://www.gravatar.com/avatar/${emailHash}?d=${encodeURIComponent(
-      DEFAULT_GRAVATAR_LINK_DARK
-    )}&size=200`;
-  } else {
-    gravatar_url = DEFAULT_GRAVATAR_LINK_FALLBACK;
-    gravatar_url_dark = DEFAULT_GRAVATAR_LINK_DARK_FALLBACK;
+  try {
+    const { hostname, pathname } = new URL(url, window.location.href);
+    // Ignore legacy email-derived avatars and vendor-hosted defaults, including
+    // URLs persisted in activity records. Keep explicitly configured images.
+    if (
+      /(^|\.)gravatar\.com$/i.test(hostname) ||
+      (/(^|\.)fleetdm\.com$/i.test(hostname) &&
+        /^\/images\/permanent\/icon-avatar-default[^/]*$/i.test(pathname))
+    ) {
+      return undefined;
+    }
+    return url;
+  } catch {
+    return undefined;
   }
+};
 
+// Keep the legacy API field names without deriving an avatar from an email.
+export const addGravatarUrlToResource = (resource: any): any => {
   return {
     ...resource,
-    gravatar_url,
-    gravatar_url_dark,
+    gravatar_url: getAvatarUrl(resource.gravatar_url),
+    gravatar_url_dark: getAvatarUrl(resource.gravatar_url_dark),
   };
 };
 

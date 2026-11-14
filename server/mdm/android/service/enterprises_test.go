@@ -104,7 +104,11 @@ func TestEnterprisesAuth(t *testing.T) {
 			err = svc.DeleteEnterprise(ctx)
 			checkAuthErr(t, tt.shouldFailWrite, err)
 
+			// Model the successful disconnect before attempting a fresh signup.
+			getEnterprise := fleetDS.GetEnterpriseFunc
+			fleetDS.GetEnterpriseFunc = func(context.Context) (*android.Enterprise, error) { return nil, &notFoundError{} }
 			_, err = svc.EnterpriseSignup(ctx)
+			fleetDS.GetEnterpriseFunc = getEnterprise
 			checkAuthErr(t, tt.shouldFailWrite, err)
 
 			ctx, cancel := context.WithCancel(ctx)
@@ -328,7 +332,7 @@ func TestVerifyExistingEnterpriseIfAny(t *testing.T) {
 	user := &fleet.User{ID: 1, GlobalRole: ptr.String(fleet.RoleAdmin)}
 	ctx := viewer.NewContext(context.Background(), viewer.Viewer{User: user})
 
-	t.Run("enterprise actually deleted - enterprise NOT in LIST", func(t *testing.T) {
+	t.Run("enterprise absent - preserve enrollment", func(t *testing.T) {
 		androidAPIClient := android_mock.Client{}
 		androidAPIClient.InitCommonMocks()
 
@@ -348,7 +352,7 @@ func TestVerifyExistingEnterpriseIfAny(t *testing.T) {
 			return nil
 		}
 
-		// Override EnterprisesListFunc to return empty list (enterprise deleted)
+		// Return enterprises from another provider/project.
 		androidAPIClient.EnterprisesListFunc = func(_ context.Context, _ string) ([]*androidmanagement.Enterprise, error) {
 			return []*androidmanagement.Enterprise{
 				{Name: "enterprises/some-other-enterprise"},
@@ -365,15 +369,15 @@ func TestVerifyExistingEnterpriseIfAny(t *testing.T) {
 		// Verify LIST API was called
 		assert.True(t, androidAPIClient.EnterprisesListFuncInvoked)
 
-		// Verify SetAndroidEnabledAndConfigured was called with false
-		assert.True(t, setAndroidCalled)
+		// Unverified absence must preserve Android configuration.
+		assert.False(t, setAndroidCalled)
 
-		// Check that it's a Fleet error with proper message and 404 status
-		assert.Contains(t, err.Error(), "Android Enterprise has been deleted")
+		// Return a conflict so signup cannot replace the existing enterprise.
+		assert.Contains(t, err.Error(), "Android Enterprise is not visible")
 		if statusErr, ok := err.(interface{ StatusCode() int }); ok {
-			assert.Equal(t, http.StatusNotFound, statusErr.StatusCode())
+			assert.Equal(t, http.StatusConflict, statusErr.StatusCode())
 		} else if statusErr, ok := err.(interface{ Status() int }); ok {
-			assert.Equal(t, http.StatusNotFound, statusErr.Status())
+			assert.Equal(t, http.StatusConflict, statusErr.Status())
 		}
 	})
 
@@ -463,7 +467,7 @@ func TestVerifyExistingEnterpriseIfAny(t *testing.T) {
 		assert.Contains(t, err.Error(), "authentication error")
 	})
 
-	t.Run("SetAndroidEnabledAndConfigured fails - still return 404", func(t *testing.T) {
+	t.Run("empty list - do not attempt destructive cleanup", func(t *testing.T) {
 		androidAPIClient := android_mock.Client{}
 		androidAPIClient.InitCommonMocks()
 
@@ -476,12 +480,12 @@ func TestVerifyExistingEnterpriseIfAny(t *testing.T) {
 		}
 
 		// Override SetAndroidEnabledAndConfigured to fail
-		fleetDS.Store.SetAndroidEnabledAndConfiguredFunc = func(_ context.Context, configured bool) error {
-			assert.False(t, configured, "Should try to turn off Android configuration")
+		fleetDS.Store.SetAndroidEnabledAndConfiguredFunc = func(context.Context, bool) error {
+			t.Error("verification must not change Android configuration")
 			return errors.New("database error")
 		}
 
-		// Override EnterprisesListFunc to return empty list (enterprise deleted)
+		// Return an empty list, which may be from a different provider/project.
 		androidAPIClient.EnterprisesListFunc = func(_ context.Context, _ string) ([]*androidmanagement.Enterprise, error) {
 			return []*androidmanagement.Enterprise{}, nil
 		}
@@ -493,12 +497,12 @@ func TestVerifyExistingEnterpriseIfAny(t *testing.T) {
 		err = svc.VerifyExistingEnterpriseIfAny(ctx)
 		require.Error(t, err)
 
-		// Should still return 404 for deleted enterprise even if SetAndroidEnabledAndConfigured fails
-		assert.Contains(t, err.Error(), "Android Enterprise has been deleted")
+		// The cleanup callback must not run on an unverified empty list.
+		assert.Contains(t, err.Error(), "Android Enterprise is not visible")
 		if statusErr, ok := err.(interface{ StatusCode() int }); ok {
-			assert.Equal(t, http.StatusNotFound, statusErr.StatusCode())
+			assert.Equal(t, http.StatusConflict, statusErr.StatusCode())
 		} else if statusErr, ok := err.(interface{ Status() int }); ok {
-			assert.Equal(t, http.StatusNotFound, statusErr.Status())
+			assert.Equal(t, http.StatusConflict, statusErr.Status())
 		}
 	})
 
@@ -564,10 +568,10 @@ func TestVerifyExistingEnterpriseIfAny(t *testing.T) {
 					require.NoError(t, err)
 					assert.False(t, setAndroidCalled, "Should not turn off Android when enterprise exists")
 				} else {
-					// Enterprise not found in list - should be deletion
+					// Enterprise absence does not prove deletion.
 					require.Error(t, err)
-					assert.True(t, setAndroidCalled, "Should turn off Android when enterprise deleted")
-					assert.Contains(t, err.Error(), "Android Enterprise has been deleted")
+					assert.False(t, setAndroidCalled, "Unverified absence must preserve Android enrollment")
+					assert.Contains(t, err.Error(), "Android Enterprise is not visible")
 				}
 			})
 		}
