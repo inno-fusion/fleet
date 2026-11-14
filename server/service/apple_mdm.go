@@ -554,9 +554,9 @@ func validatePSSORegistrationTokenVariable(contents string) error {
 		if p.RegistrationToken != varWithPrefix && p.RegistrationToken != varWithBraces {
 			continue
 		}
-		if !strings.HasPrefix(p.ExtensionIdentifier, "com.fleetdm") {
+		if !apple_mdm.PSSOExtensionIdentifierAllowed(p.ExtensionIdentifier) {
 			return &fleet.BadRequestError{Message: fmt.Sprintf(
-				"Variable %s is only allowed in a Fleet Platform SSO payload (the ExtensionIdentifier must start with \"com.fleetdm\").",
+				"Variable %s is only allowed in a Fleet Platform SSO payload (the ExtensionIdentifier must start with \"com.fleetdm\" or match a bundle ID in mdm.apple_psso_app_ids).",
 				varWithPrefix,
 			)}
 		}

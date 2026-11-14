@@ -36,6 +36,7 @@ import (
 	"github.com/fleetdm/fleet/v4/ee/server/service/hostidentity"
 	"github.com/fleetdm/fleet/v4/ee/server/service/hostidentity/httpsig"
 	"github.com/fleetdm/fleet/v4/ee/server/service/scep"
+	"github.com/fleetdm/fleet/v4/pkg/fleetdbase"
 	"github.com/fleetdm/fleet/v4/pkg/fleethttp"
 	"github.com/fleetdm/fleet/v4/pkg/str"
 	"github.com/fleetdm/fleet/v4/server"
@@ -391,6 +392,12 @@ func runServeCmd(cmd *cobra.Command, configManager configpkg.Manager, debug, dev
 	}
 
 	apple_mdm.SetMachineInfoVerification(config.MDM.AppleMachineInfoVerify)
+	if err := apple_mdm.SetPSSOAppIDs(config.MDM.ApplePSSOAppIDs); err != nil {
+		initFatal(err, "mdm.apple_psso_app_ids")
+	}
+	if err := fleetdbase.SetBaseURL(config.MDM.FleetdBaseURL); err != nil {
+		initFatal(err, "mdm.fleetd_base_url")
+	}
 	if !apple_mdm.MachineInfoVerificationEnabled() {
 		logger.WarnContext(cmd.Context(), "Apple MDM MachineInfo (deviceinfo) signature verification is disabled via "+
 			"mdm.apple_machineinfo_verify; verification failures during enrollment will be logged but not enforced")
