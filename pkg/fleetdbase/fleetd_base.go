@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
+	"sync/atomic"
 
 	"github.com/fleetdm/fleet/v4/server/dev_mode"
 )
@@ -19,10 +21,30 @@ type Metadata struct {
 	Version          string `json:"version"`
 }
 
+var configuredBaseURL atomic.Pointer[string]
+
+// SetBaseURL points fleetd-base downloads at an operator-hosted mirror of
+// download.fleetdm.com's /stable layout. Called once at server startup from
+// config.MDM.FleetdBaseURL; empty keeps the default.
+func SetBaseURL(raw string) error {
+	raw = strings.TrimRight(strings.TrimSpace(raw), "/")
+	if raw != "" {
+		u, err := url.Parse(raw)
+		if err != nil || u.Scheme != "https" || u.Host == "" {
+			return fmt.Errorf("fleetd base URL must be an absolute https URL, got %q", raw)
+		}
+	}
+	configuredBaseURL.Store(&raw)
+	return nil
+}
+
 func getBaseURL() string {
 	devURL := dev_mode.Env("FLEET_DEV_DOWNLOAD_FLEETDM_URL")
 	if devURL != "" {
 		return devURL
+	}
+	if u := configuredBaseURL.Load(); u != nil && *u != "" {
+		return *u
 	}
 	return "https://download.fleetdm.com"
 }

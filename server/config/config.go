@@ -1277,6 +1277,10 @@ type MDMConfig struct {
 	AppleMDMVendorCert  string `yaml:"apple_mdm_vendor_cert"`
 	AppleMDMVendorKey   string `yaml:"apple_mdm_vendor_key"`
 	AppleMDMVendorChain string `yaml:"apple_mdm_vendor_chain"`
+	// ApplePSSOAppIDs replaces Fleet's built-in Platform SSO app IDs (comma-separated <TeamID>.<BundleID>).
+	ApplePSSOAppIDs string `yaml:"apple_psso_app_ids"`
+	// FleetdBaseURL replaces https://download.fleetdm.com as the source of fleetd-base installers.
+	FleetdBaseURL string `yaml:"fleetd_base_url"`
 
 	// WindowsWSTEPIdentityCert is the path to the certificate used to sign
 	// WSTEP responses.
@@ -2319,6 +2323,8 @@ func (man Manager) addConfigs() {
 	man.addConfigString("mdm.apple_mdm_vendor_cert", "", "PEM MDM vendor signing certificate path for local APNs CSR signing")
 	man.addConfigString("mdm.apple_mdm_vendor_key", "", "PEM MDM vendor signing private key path (PKCS1 or PKCS8)")
 	man.addConfigString("mdm.apple_mdm_vendor_chain", "", "PEM Apple intermediate and root certificate chain path for the MDM vendor certificate")
+	man.addConfigString("mdm.apple_psso_app_ids", "", "Comma-separated <TeamID>.<BundleID> Platform SSO app IDs that replace Fleet's built-in ones")
+	man.addConfigString("mdm.fleetd_base_url", "", "HTTPS base URL serving /stable/meta.json and /stable/fleetd-base-manifest.plist instead of download.fleetdm.com")
 	man.addConfigString("mdm.apple_scep_challenge", "", "SCEP static challenge for enrollment")
 	man.addConfigDuration("mdm.apple_dep_sync_periodicity", 1*time.Minute, "How much time to wait for DEP profile assignment")
 	man.addConfigDuration("mdm.apple_apns_push_expiration", 30*24*time.Hour, "How long APNs should store and retry delivering push notifications to offline devices (apns-expiration header, 30 days is APNs' documented maximum); zero or negative omits the header")
@@ -2743,6 +2749,8 @@ func (man Manager) LoadConfig() FleetConfig {
 			AppleMDMVendorCert:                man.getConfigString("mdm.apple_mdm_vendor_cert"),
 			AppleMDMVendorKey:                 man.getConfigString("mdm.apple_mdm_vendor_key"),
 			AppleMDMVendorChain:               man.getConfigString("mdm.apple_mdm_vendor_chain"),
+			ApplePSSOAppIDs:                   man.getConfigString("mdm.apple_psso_app_ids"),
+			FleetdBaseURL:                     man.getConfigString("mdm.fleetd_base_url"),
 			AppleSCEPChallenge:                man.getConfigString("mdm.apple_scep_challenge"),
 			AppleDEPSyncPeriodicity:           man.getConfigDuration("mdm.apple_dep_sync_periodicity"),
 			AppleAPNsPushExpiration:           man.getConfigDuration("mdm.apple_apns_push_expiration"),
