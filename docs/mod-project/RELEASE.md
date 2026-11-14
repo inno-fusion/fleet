@@ -4,7 +4,7 @@
 
 - Upstream: `fleet-v4.94.1` at `7e7d17b75abd7a81f8320ca75531b47f0933bc1b`.
 - Fork version branch: `v4.94.1`. Maintenance ref: `cherry`.
-- Fork release tag: `v4.94.1-mod`. Do not move the existing upstream tag.
+- Optional fork source tag: `v4.94.1-mod`. Do not move the existing upstream tag.
 - Server image: `ghcr.io/inno-fusion/fleet:v4.94.1` and `:latest` for Linux
   ARM64 and AMD64. Use the verified immutable manifest digest for deployment.
 - Server/CLI version: `4.94.1-mod`, with the exact version-branch commit embedded.
@@ -16,6 +16,14 @@
   notarization claim. Other OS binaries are cross-built, not native-OS tested.
 - Include upstream MIT and EE license texts with binaries/images. The research
   opt-in does not change their terms or grant production/distribution rights.
+
+Publication scope is private GHCR only. Do not attach binary archives or Mac
+apps to releases in the public source repository. Local archives remain available
+for internal evaluation. License texts are files, not UI banners or runtime gates.
+The image deliberately uses the OCI `url` label rather than `source` so first
+publication does not automatically inherit access from the public source repo.
+Read back package visibility and confirm unauthenticated manifest access is denied
+after publication. Never change this package to public as part of an update.
 
 The image opts into the local research tier by default. Set
 `FLEET_LICENSE_LOCAL_RESEARCH=false` to exercise normal signed-license/free

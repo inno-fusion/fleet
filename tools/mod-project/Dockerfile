@@ -3,7 +3,7 @@ ARG TARGETARCH
 ARG RELEASE_VERSION
 ARG SOURCE_REVISION
 LABEL org.opencontainers.image.title="0xMetaLabs Fleet research fork" \
-      org.opencontainers.image.source="https://github.com/inno-fusion/fleet" \
+      org.opencontainers.image.url="https://github.com/inno-fusion/fleet" \
       org.opencontainers.image.version="${RELEASE_VERSION}" \
       org.opencontainers.image.revision="${SOURCE_REVISION}" \
       org.opencontainers.image.licenses="MIT AND LicenseRef-Fleet-EE"
