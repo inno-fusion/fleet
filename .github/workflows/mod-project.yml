@@ -78,6 +78,8 @@ jobs:
           go test -race ./orbit/pkg/dialogassets ./orbit/pkg/setup_experience ./orbit/pkg/useraction ./orbit/pkg/swiftdialog -count=1
       - name: Install browser for built-app smoke
         run: yarn playwright install --with-deps chromium
+      - name: Smoke environment isolation regressions
+        run: python3 tools/mod-project/test_smoke_env.py -v
       - name: Research and free-mode HTTP and browser smoke
         run: |
           FLEET_MOD_BROWSER_SMOKE=1 bash tools/mod-project/run-smoke.sh research
