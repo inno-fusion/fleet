@@ -46,13 +46,10 @@ with os.fdopen(fd, "w") as f:
     json.dump(config, f)
 PY
 docker compose exec -T mysql_test mysql -uroot -ptoor -e "DROP DATABASE IF EXISTS ${database}; CREATE DATABASE ${database};"
-export FLEET_LICENSE_KEY=""
-export FLEET_LICENSE_LOCAL_RESEARCH=false
-if [[ "$tier" == research ]]; then export FLEET_LICENSE_LOCAL_RESEARCH=true; fi
 # Refuse functional external fetches during this credential-free smoke; loopback is allowed.
 export HTTP_PROXY=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 NO_PROXY=127.0.0.1,localhost
-./build/fleet prepare db --config "$work/config.yml" --no-prompt > "$work/prepare.log" 2>&1
-./build/fleet serve --config "$work/config.yml" > "$work/server.log" 2>&1 &
+python3 tools/mod-project/smoke_env.py "$tier" ./build/fleet prepare db --config "$work/config.yml" --no-prompt > "$work/prepare.log" 2>&1
+python3 tools/mod-project/smoke_env.py "$tier" ./build/fleet serve --config "$work/config.yml" > "$work/server.log" 2>&1 &
 pid=$!
 if ! python3 - "$port" "$pid" <<'PY'
 import os, sys, time, urllib.request

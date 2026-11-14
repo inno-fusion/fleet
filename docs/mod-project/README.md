@@ -141,8 +141,9 @@ CI workflow only tests/builds; it does not publish containers or deploy devices.
 For future upstream updates:
 
 1. Fetch an explicit stable upstream release and record its immutable commit.
-2. Create a temporary update branch from the new release. Replay the focused
-   single mod-project commit by intent; never force-push `main`.
+2. Create a temporary update branch from the new release. Replay both mod-project
+   commits above the recorded base by intent (see the exact range command in
+   `VERIFICATION.md`); never force-push `main` or cherry-pick only the branch tip.
 3. Review changes to `LicenseInfo`, license loading/context middleware, frontend
    tier comparisons, telemetry configuration/collection/sending, new capability
    gates, and all Fleet-hosted API calls. New features must not silently fall out
