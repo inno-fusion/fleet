@@ -100,5 +100,12 @@ class ReleaseBuilderTests(unittest.TestCase):
             self.assertEqual((Path(temporary) / "sentinel").read_text(), "do not overwrite")
 
 
+    def test_version_without_upstream_tag_fails_before_build(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            result = subprocess.run([sys.executable, str(BUILDER.__file__), "--version", "0.0.1",
+                                     "--output", temporary], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("Missing upstream tag fleet-v0.0.1", result.stderr)
+
 if __name__ == "__main__":
     unittest.main()

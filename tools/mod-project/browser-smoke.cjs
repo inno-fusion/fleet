@@ -40,11 +40,15 @@ const { chromium } = require("playwright");
       "/settings/integrations/sso/fleet-users",
       "/settings/organization/statistics",
       "/account",
+      "/software/library/settings/patch-deadline",
     ];
     for (const path of routes) {
       await page.goto(url + path, { waitUntil: "networkidle" });
       const text = await page.locator("body").innerText();
-      assert(!/Your license (?:has|is about to) expire|Fleet Premium is required|Page not found/i.test(text), path + " showed a gate/error");
+      assert.equal(await page.locator(".license-expiry-banner, .license-host-limit-message, .premium-feature-message-container").count(), 0,
+        path + " showed a license gate or banner");
+      assert(!/Fleet Premium license is about to expire|Your license covers [\d,]+ hosts?|This feature is included in Fleet Premium|Requires Fleet Premium|Page not found/i.test(text),
+        path + " showed a gate/error");
       assert.equal(new URL(page.url()).pathname, path, path + " redirected");
       assert(text.length > 60, path + " did not render content");
       console.log("PASS built research dashboard route " + path);

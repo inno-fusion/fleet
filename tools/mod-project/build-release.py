@@ -67,17 +67,33 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     if any(output.iterdir()):
         parser.error("Output directory must be empty")
+    # The version labels binaries, archives and images, so it must name the upstream
+    # release this branch is actually built on.
+    tag = "fleet-v" + args.version
+    base = subprocess.run(["git", "rev-parse", "--verify", "--quiet", tag + "^{commit}"], cwd=ROOT,
+                          capture_output=True, text=True).stdout.strip()
+    if not base:
+        parser.error("Missing upstream tag " + tag + "; fetch upstream tags or fix --version")
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=no"], cwd=ROOT, text=True):
         parser.error("Commit tracked source changes before building a release")
+    nearest = subprocess.run(["git", "describe", "--tags", "--match", "fleet-v*", "--abbrev=0", revision],
+                             cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    if subprocess.run(["git", "merge-base", "--is-ancestor", base, revision], cwd=ROOT).returncode != 0 \
+            or nearest != tag:
+        parser.error(tag + " is not the upstream release this commit is built on (nearest: "
+                     + (nearest or "none") + ")")
     branch = subprocess.check_output(["git", "branch", "--show-current"], cwd=ROOT, text=True).strip()
     with isolated_source(revision):
-        build_release(args.version, output, revision, branch)
+        build_release(args.version, output, revision, branch, tag, base)
 
 
-def build_release(version, output, revision, branch):
+def build_release(version, output, revision, branch, upstream_tag=None, upstream_commit=None):
     date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     environment = dict(os.environ)
+    # Upstream's AI profile builder UI sends prompts to fleetdm.com; never let a caller's
+    # shell switch it on in a release build.
+    environment.pop("SHOW_AI_PROFILE_BUILDER", None)
     environment.setdefault("GOMAXPROCS", "3")
     environment["GOFLAGS"] = "-p=3 -mod=readonly"
     run("yarn", "install", "--frozen-lockfile", "--non-interactive", env=dict(environment, NODE_ENV="development"))
@@ -87,7 +103,9 @@ def build_release(version, output, revision, branch):
     binaries = output / "binaries"
     binaries.mkdir()
     provenance = {"version": version + "-mod", "revision": revision, "branch": branch,
-                  "upstream_version": version, "build_date": date, "artifacts": [],
+                  "upstream_version": version, "upstream_tag": upstream_tag, "upstream_commit": upstream_commit,
+                  "frontend_feature_flags": {"SHOW_AI_PROFILE_BUILDER": None},
+                  "build_date": date, "artifacts": [],
                   "source_isolation": "fresh detached worktree; locked dependencies; fresh generated assets"}
     for name, targets in (("fleet", [("linux", "arm64"), ("linux", "amd64")]),
                           ("fleetctl", [(system, arch) for system in ("linux", "darwin", "windows")
