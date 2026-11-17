@@ -8,7 +8,7 @@ import { DisplayPlatform, Platform } from "interfaces/platform";
 import { ISchedulableQuery } from "interfaces/schedulable_query";
 import URL_PREFIX from "router/url_prefix";
 
-import defaultAvatarUrl from "../../assets/images/avatar.svg";
+import defaultAvatarUrl from "../assets/images/avatar.svg";
 
 const { origin } = global.window.location;
 export const BASE_URL = `${origin}${URL_PREFIX}/api`;
