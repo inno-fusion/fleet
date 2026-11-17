@@ -2,9 +2,6 @@ package mysql
 
 import (
 	"context"
-	"database/sql"
-	"encoding/json"
-	"errors"
 	"time"
 
 	"github.com/fleetdm/fleet/v4/server/config"
@@ -108,47 +105,11 @@ func fleetMaintainedAppsInUseDB(ctx context.Context, db sqlx.QueryerContext) (ma
 	return macOSApps, windowsApps, nil
 }
 
-// Upstream's AI-generated profile counter is a local aggregate only: the fork never sends
-// usage statistics, so nothing reads these counts into an outbound payload.
-// aiGeneratedProfileCounts is the json_value of the aggregated_stats row that counts generated profiles.
-type aiGeneratedProfileCounts struct {
-	Apple   int `json:"apple"`
-	Windows int `json:"windows"`
-}
-
+// IncrementAIGeneratedProfileCount keeps upstream's input check but records nothing: the
+// count only feeds the usage-statistics payload, and the fork collects no product analytics.
 func (ds *Datastore) IncrementAIGeneratedProfileCount(ctx context.Context, platform string) error {
 	if platform != fleet.AutofillConfigProfilePlatformApple && platform != fleet.AutofillConfigProfilePlatformWindows {
 		return ctxerr.Errorf(ctx, "unsupported platform for AI generated profile count: %q", platform)
 	}
-
-	// One statement, so concurrent generations each add one instead of overwriting each other's read.  The CAST
-	// keeps the count an integer: JSON arithmetic would store 2.0.
-	const stmt = `
-		INSERT INTO aggregated_stats (id, global_stats, type, json_value)
-		VALUES (0, 1, ?, JSON_OBJECT(?, 1))
-		ON DUPLICATE KEY UPDATE
-			json_value = JSON_SET(json_value, ?, COALESCE(CAST(JSON_EXTRACT(json_value, ?) AS UNSIGNED), 0) + 1)`
-	path := "$." + platform
-	// Every generation updates this one row, so retry the lock errors the retry helper covers rather than lose a count.
-	return ds.withRetryTxx(ctx, func(tx sqlx.ExtContext) error {
-		_, err := tx.ExecContext(ctx, stmt, aggregatedStatsTypeAIGeneratedProfiles, platform, path, path)
-		return ctxerr.Wrap(ctx, err, "increment AI generated profile count")
-	})
-}
-
-func aiGeneratedProfileCountsDB(ctx context.Context, db sqlx.QueryerContext) (aiGeneratedProfileCounts, error) {
-	var counts aiGeneratedProfileCounts
-	var raw json.RawMessage
-	err := sqlx.GetContext(ctx, db, &raw, `SELECT json_value FROM aggregated_stats WHERE id = 0 AND global_stats = 1 AND type = ?`,
-		aggregatedStatsTypeAIGeneratedProfiles)
-	if errors.Is(err, sql.ErrNoRows) {
-		return counts, nil
-	}
-	if err != nil {
-		return counts, ctxerr.Wrap(ctx, err, "get AI generated profile counts")
-	}
-	if err := json.Unmarshal(raw, &counts); err != nil {
-		return counts, ctxerr.Wrap(ctx, err, "unmarshal AI generated profile counts")
-	}
-	return counts, nil
+	return nil
 }

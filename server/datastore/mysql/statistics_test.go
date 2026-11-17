@@ -479,7 +479,7 @@ func testStatisticsFleetMDMEnrolled(t *testing.T, ds *Datastore) {
 func testStatisticsAIGeneratedProfileCounts(t *testing.T, ds *Datastore) {
 	ctx := t.Context()
 
-	// Generations run concurrently, so every increment has to land.
+	// Generating profiles must not collect analytics: valid platforms succeed but store nothing.
 	const perPlatform = 20
 	var wg sync.WaitGroup
 	errs := make(chan error, 2*perPlatform)
@@ -495,21 +495,15 @@ func testStatisticsAIGeneratedProfileCounts(t *testing.T, ds *Datastore) {
 	for err := range errs {
 		require.NoError(t, err)
 	}
-	require.NoError(t, ds.IncrementAIGeneratedProfileCount(ctx, fleet.AutofillConfigProfilePlatformApple))
-
 	require.Error(t, ds.IncrementAIGeneratedProfileCount(ctx, "android"))
 
-	counts, err := aiGeneratedProfileCountsDB(ctx, ds.reader(ctx))
-	require.NoError(t, err)
-	assert.Equal(t, perPlatform+1, counts.Apple)
-	assert.Equal(t, perPlatform, counts.Windows)
+	var rows int
+	ExecAdhocSQL(t, ds, func(q sqlx.ExtContext) error {
+		return sqlx.GetContext(ctx, q, &rows, `SELECT COUNT(*) FROM aggregated_stats WHERE type = ?`, aggregatedStatsTypeAIGeneratedProfiles)
+	})
+	assert.Zero(t, rows)
 
-	// The fork never builds a usage-statistics payload, even when counts exist, and cleanup keeps them.
 	_, shouldSend, err := ds.ShouldSendStatistics(ctx, time.Millisecond, config.TestConfig())
 	require.NoError(t, err)
 	assert.False(t, shouldSend)
-	require.NoError(t, ds.CleanupStatistics(ctx))
-	counts, err = aiGeneratedProfileCountsDB(ctx, ds.reader(ctx))
-	require.NoError(t, err)
-	assert.Equal(t, perPlatform+1, counts.Apple)
 }

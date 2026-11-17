@@ -58,11 +58,13 @@ jobs:
         run: >-
           env -u REDIS_TEST go test ./ee/server/licensing ./server/contexts/license ./server/fleet
           ./server/config ./server/mdm/apple/... ./server/mdm/android/service/...
-          ./server/platform/endpointer ./server/authz ./server/service/middleware/auth ./pkg/spec
+          ./server/platform/endpointer ./server/authz ./server/service/middleware/auth ./pkg/spec ./pkg/fleetdbase
+      - name: Platform SSO app ID regressions
+        run: go test ./ee/server/service -run 'TestPSSO' -count=1
       - name: Analytics, statistics and local signing regressions (MySQL enabled)
         run: >-
           go test ./cmd/fleet ./server/service ./server/datastore/mysql
-          -run 'Test.*(Analytics|Statistics|LocalVendorSigning|ModifyAppConfig|MDMAppleAuthorization|GetMDMApple|Android.*Provider|Android.*Routing)' -count=1 -v
+          -run 'Test.*(Analytics|Statistics|LocalVendorSigning|ModifyAppConfig|MDMAppleAuthorization|GetMDMApple|Android.*Provider|Android.*Routing|PSSO)' -count=1 -v
       - name: Frontend privacy and entitlement regressions
         run: >-
           yarn test --runInBand --watch=false
