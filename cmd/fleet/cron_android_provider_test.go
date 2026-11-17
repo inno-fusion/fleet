@@ -100,6 +100,13 @@ func androidCronDatastore(t *testing.T, completed chan<- fleet.CronScheduleError
 	}
 	ds.GetMDMAndroidReconcileCursorFunc = func(context.Context) (string, error) { return "", nil }
 	ds.ListAndroidHostUUIDsWithPendingCertificateTemplatesFunc = func(context.Context, string, int) ([]string, error) { return nil, nil }
+	ds.ListAndroidHostsOnHostPolicyFunc = func(context.Context) ([]*fleet.Host, error) { return nil, nil }
+	ds.ListAndroidAppsInScopeForHostsFunc = func(context.Context, []uint) (map[uint][]fleet.VPPAppTeam, error) { return nil, nil }
+	ds.ListHostMDMAndroidVPPAppsFromSetupExperienceFunc = func(context.Context, []uint) (map[uint][]*fleet.HostAndroidVPPSoftwareInstall, error) { return nil, nil }
+	ds.ListHostAndroidSoftwareInstallsFunc = func(context.Context, []uint) (map[uint]map[string]*fleet.HostAndroidSoftwareInstall, error) { return nil, nil }
+	ds.GetAndroidAppStoreAppVersionsByIDFunc = func(context.Context) (map[uint]*fleet.VPPAppStoreApp, error) { return nil, nil }
+	ds.BulkUpsertHostAndroidSoftwareInstallsFunc = func(context.Context, []fleet.HostAndroidSoftwareInstall, []fleet.HostAndroidSoftwareInstall) error { return nil }
+	ds.SetHostAndroidSoftwareInstallsNeedsResendFunc = func(context.Context, []uint, *time.Time, *string) error { return nil }
 	ds.GetMDMAndroidProfilesWriteTimeFunc = func(context.Context) (time.Time, error) { return time.Now(), nil }
 	ds.ListMDMAndroidProfilesToSendFunc = func(context.Context, string, int) ([]*fleet.MDMAndroidProfilePayload, []*fleet.MDMAndroidProfilePayload, error) {
 		return []*fleet.MDMAndroidProfilePayload{{HostUUID: "host", ProfileUUID: "profile", ProfileName: "policy"}}, nil, nil

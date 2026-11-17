@@ -12,7 +12,7 @@ import usersAPI from "services/entities/users";
 import { createCustomRenderer, createMockRouter } from "test/test-utils";
 import authToken from "utilities/auth_token";
 
-import fleetLogo from "../../../assets/images/fleet-avatar-24x24@2x.png";
+import fleetLogo from "../../assets/images/fleet-avatar-24x24@2x.png";
 
 import App, { getEarliestEJBCACertExpiry } from "./App";
 
