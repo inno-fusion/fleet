@@ -2,8 +2,8 @@
 
 ## Scope
 
-Baseline: Fleet `fleet-v4.94.1`, commit
-`7e7d17b75abd7a81f8320ca75531b47f0933bc1b`. This is an opt-in local
+Baseline: Fleet `fleet-v4.95.0`, commit
+`5790b6cafd149ad082d5a33a65e6ea016212560d`. This is an opt-in local
 research entitlement, selective product-analytics removal, and independently
 configurable platform integration patch. It is not a signed Fleet subscription
 or a replacement for Apple/Google approval and credentials.
@@ -26,21 +26,27 @@ Start the upstream disposable database and a standalone Redis. Ports default to
 separate Compose project if these names/ports belong to another workload.
 
 ```bash
+# Keep COMPOSE_PROJECT_NAME exported for every test command: the MySQL test helpers
+# call docker compose themselves and otherwise report "mysql_test is not running".
 export COMPOSE_PROJECT_NAME=fleet-mod-ci
+export REDIS_TEST_SKIP_CLUSTER=1   # cluster tests need upstream's six-node Redis setup
 export TMPDIR="${TMPDIR:-$PWD/build}"
 mkdir -p "$TMPDIR"
 docker compose up -d mysql_test redis
 # Wait for mysqladmin -uroot -ptoor ping inside mysql_test before tests.
 
-go test ./ee/server/licensing ./server/contexts/license ./server/fleet \
+MYSQL_TEST=1 REDIS_TEST=1 go test ./ee/server/licensing ./server/contexts/license ./server/fleet \
   ./server/config ./server/mdm/apple/... ./server/mdm/android/service/... \
-  ./server/platform/endpointer ./server/authz ./server/service/middleware/auth ./pkg/spec
+  ./server/platform/endpointer ./server/authz ./server/service/middleware/auth ./pkg/spec \
+  ./pkg/fleetdbase
+go test ./ee/server/service -run 'TestPSSO' -count=1
+go test ./cmd/fleet -run 'TestAndroid(CronsUseConfiguredProvider|ProviderSwitchPreservesEnterprise)' -count=1
 
 go test -race ./ee/server/licensing ./server/contexts/license ./server/fleet \
   ./server/platform/endpointer ./server/authz ./server/service/middleware/auth
 
 MYSQL_TEST=1 REDIS_TEST=1 go test ./cmd/fleet ./server/service ./server/datastore/mysql \
-  -run 'Test.*(Analytics|Statistics|LocalVendorSigning|ModifyAppConfig|MDMAppleAuthorization|GetMDMApple|Features|HistoricalData)' \
+  -run 'Test.*(Analytics|Statistics|LocalVendorSigning|ModifyAppConfig|MDMAppleAuthorization|GetMDMApple|Features|HistoricalData|PSSO)' \
   -count=1 -v
 
 yarn test --runInBand --watch=false \
@@ -51,6 +57,10 @@ python3 tools/mod-project/test_smoke_env.py -v
 yarn playwright install chromium
 FLEET_MOD_BROWSER_SMOKE=1 bash tools/mod-project/run-smoke.sh research
 bash tools/mod-project/run-smoke.sh free
+go test -tags full ./server/mail -count=1
+go test ./server/service -run 'Test.*(Email|Asset|Subpath|WriteBrowserSecurityHeaders|LocalVendorSigning)' -count=1
+go test -race ./orbit/pkg/dialogassets ./orbit/pkg/setup_experience ./orbit/pkg/useraction ./orbit/pkg/swiftdialog -count=1
+python3 tools/mod-project/test_build_release.py -v
 git diff --check
 ```
 
@@ -76,7 +86,52 @@ the upstream `docker-compose-redis-cluster.yml` environment. Do not equate a
 skipped integration test with a pass. On macOS, upstream supports
 `REDIS_TEST_SKIP_CLUSTER=1` for suites that intentionally omit cluster tests.
 
-## Recorded evidence
+## Recorded evidence: fleet-v4.95.0 replay (2026-11-17)
+
+Branch `v4.95.0` = `fleet-v4.95.0` plus the seven fork commits from `cherry`
+(`fleet-v4.94.1..v4.94.1`), replayed in order, then one adaptation commit and one
+hardening commit for 4.95.0.
+
+- Replay: the research/routing commit conflicted in ten files (Android reconcile
+  signatures, which now carry upstream's retry counter; statistics payload; Pendo
+  removal next to upstream's new session-expiry handler; four test files both sides
+  added). Each was resolved keeping upstream's change and the fork's intent. The other
+  six commits applied cleanly.
+- Adaptation: upstream moved bundled images to `frontend/assets/images`, so the local
+  default avatar import moved with them; the Android provider-routing test stubs the
+  datastore reads of 4.95.0's new app reconciler.
+- Hardening: upstream's new AI-generated-profile counter records nothing (it only fed
+  usage statistics); the image base matches upstream's Alpine 3.23.8 security bump;
+  `build-release.py` refuses a `--version` that is not the branch's upstream tag and
+  records the tag, commit and frontend feature flags; smoke tests detect license
+  banners by element and cover 4.95.0's patch-deadline Premium gate in both tiers.
+- New 4.95.0 gates reviewed: the licensed-host-limit banner (research omits
+  `device_count`, so it never shows; frontend test added), patch deadline settings,
+  AI tool software, MCP, EJBCA, Okta Windows conditional access and Google device IDs
+  all go through `IsPremium`.
+- Results: Go unit/Apple/Android packages, `-race` licensing/authz suites, MySQL
+  regressions (316 subtests, 0 skipped), Android routing, Platform SSO and fleetd-base
+  tests, mail and agent presentation tests all pass. Frontend: 23 suites, 299 tests;
+  `tsc` clean. `build.sh` produced `4.95.0-mod-project` at a clean revision. Research
+  HTTP + browser smoke (19 checks, no external browser requests, new patch-deadline
+  page without a license gate) and free smoke pass. `test_smoke_env.py` 5/5 and
+  `test_build_release.py` 8/8 pass. Redis cluster tests were skipped as documented.
+
+Known follow-ups, recorded rather than changed (the deployment is Mac-only):
+
+- Android: an admin disconnect under a mismatched provider treats "not visible" as
+  deleted; the default-policy app-report and per-host-policy migration jobs and the
+  software worker use the routed client without re-verifying the enterprise;
+  `android_service.NewService` and a nil client in `ReconcileProfilesWithClient` still
+  fall back to default routing if a future replay calls them; no test drives a real
+  app-list request through the configured provider.
+- Windows: a macOS-only fleetd-base mirror publishes an empty MSI entry.
+- Apple: local CSR signing is chosen only when a vendor setting is non-empty (see the
+  README note on exact variable names); the research license still reports a zero
+  expiration date to API consumers; the frontend counts signed trial licenses as
+  Premium, which matches the server.
+
+## Recorded evidence: fleet-v4.94.1 (historical)
 
 The re-audit verified the following against the working patch:
 
@@ -160,30 +215,26 @@ smoke and is not Fleet product analytics. The fork is not air-gapped.
 
 ## Reapply to upstream
 
-The branch contains the complete feature commit followed by a smoke-isolation
-correction. The correction was discovered after publication, so published history
-was not rewritten. Replay the full ordered range above the recorded upstream
-base, not just the branch tip. Keep code, regressions, build/CI and documentation
-together when consolidating the patch for a later release.
+Replay the full ordered range of fork commits from `cherry` (the deployed version
+branch), not just the branch tip and not the historical `mod-project` branch, which
+holds only the original two commits.
 
 ```bash
-git fetch origin mod-project
-base=7e7d17b75abd7a81f8320ca75531b47f0933bc1b
-# Fetch/verify a specific new stable upstream tag separately.
-git switch -c mod-project-next VERIFIED_UPSTREAM_TAG
-git cherry-pick "$base..origin/mod-project"
+git fetch upstream --tags && git fetch origin
+OLD=4.95.0 NEW=<verified stable upstream version>
+git rev-list --count "fleet-v$OLD..origin/cherry"   # the fork commits to replay
+git switch -c "v$NEW" "refs/tags/fleet-v$NEW"
+git cherry-pick "fleet-v$OLD..origin/cherry"
 ```
 
 A clean cherry-pick is not proof of compatibility. Resolve conflicts by intent,
 then repeat the complete tests/build/smoke. Inspect new raw tier/expiry/quota gates,
 all AMAPI client constructors and background workers, license-key consumers,
-analytics collection/upload/config coercion, and unsolicited browser defaults.
-Preserve genuine remote authorization, user-configured integrations, and RBAC.
-Review security/dependency changes in the new release independently.
+analytics collection/upload/config coercion, new Fleet-hosted calls, moved assets,
+and unsolicited browser defaults. Preserve genuine remote authorization,
+user-configured integrations, and RBAC. Review security/dependency changes in the
+new release independently, including the Docker base image.
 
-For exact-baseline replay verification, apply the full range to a disposable
-worktree at the recorded base with `git cherry-pick --no-commit`, then compare
-`git write-tree` with the branch tip's tree. Remove only that disposable
-worktree after checking equality. Never reset the user's worktree or force-push
-`main`. Push only `refs/heads/mod-project` and verify the remote commit SHA and
-Actions results before reporting publication success.
+Push the new version branch and `v$NEW-mod` tag, publish the image, deploy, and only
+then move `cherry` with `--force-with-lease`. Never reset the user's worktree or
+force-push `main`.

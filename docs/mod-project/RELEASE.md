@@ -1,13 +1,13 @@
-# Fleet v4.94.1 mod release
+# Fleet v4.95.0 mod release
 
 ## Release layout
 
-- Upstream: `fleet-v4.94.1` at `7e7d17b75abd7a81f8320ca75531b47f0933bc1b`.
-- Fork version branch: `v4.94.1`. Maintenance ref: `cherry`.
-- Optional fork source tag: `v4.94.1-mod`. Do not move the existing upstream tag.
-- Server image: `ghcr.io/inno-fusion/fleet:v4.94.1` and `:latest` for Linux
+- Upstream: `fleet-v4.95.0` at `5790b6cafd149ad082d5a33a65e6ea016212560d`.
+- Fork version branch: `v4.95.0`. Maintenance ref: `cherry`.
+- Fork source tag: `v4.95.0-mod`. Do not move upstream tags or earlier `-mod` tags.
+- Server image: `ghcr.io/inno-fusion/fleet:v4.95.0` and `:latest` for Linux
   ARM64 and AMD64. Use the verified immutable manifest digest for deployment.
-- Server/CLI version: `4.94.1-mod`, with the exact version-branch commit embedded.
+- Server/CLI version: `4.95.0-mod`, with the exact version-branch commit embedded.
 - The server binary embeds the dashboard. There is no separate frontend container.
 - MySQL and Redis are dependencies, not modified applications: use maintained,
   pinned official images and persistent MySQL storage.
@@ -37,11 +37,11 @@ On a clean macOS checkout with repository-supported Go/Node, Yarn, Zig, Xcode
 command-line tools:
 
 ```bash
-python3 tools/mod-project/build-release.py --version 4.94.1 --output "$HOME/fleet-release-output"
+python3 tools/mod-project/build-release.py --version 4.95.0 --output "$HOME/fleet-release-output"
 docker buildx build --platform linux/arm64,linux/amd64 \
-  --build-arg RELEASE_VERSION=4.94.1-mod \
+  --build-arg RELEASE_VERSION=4.95.0-mod \
   --build-arg SOURCE_REVISION="$(git rev-parse HEAD)" \
-  -t ghcr.io/inno-fusion/fleet:v4.94.1 \
+  -t ghcr.io/inno-fusion/fleet:v4.95.0 \
   -t ghcr.io/inno-fusion/fleet:latest \
   --push "$HOME/fleet-release-output"
 ```
@@ -50,7 +50,7 @@ Server cross-builds require CGO and static musl linking for SQLite/FTS5; do not
 substitute `CGO_ENABLED=0` just because that binary compiles. Fleet's vulnerability
 queries use SQLite at runtime. Zig supplies architecture-matched C toolchains.
 The native client components have their own upstream versions, separate from
-Fleet server's 4.94.1. Do not stamp Orbit/Desktop with the server version.
+Fleet server's 4.95.0. Do not stamp Orbit/Desktop with the server version.
 
 The builder creates a fresh detached worktree at the committed source revision,
 installs locked dependencies there, and regenerates all dashboard/bindata assets.
@@ -106,9 +106,18 @@ real credentials and a pilot device; synthetic CSR tests do not establish them.
 
 ## Future updates
 
-Start from an explicit upstream tag and replay custom commits from `cherry` by
-intent. The original modifications are two commits; release packaging is an
-additional focused commit. Never cherry-pick only the latest commit. Keep raw
-license checks, privacy defaults, Android API/background routing and non-destructive
-provider guards in the audit. Rebuild/test the actual container and verify all
-remote branch, image and asset hashes before moving the `cherry` ref.
+Start from an explicit upstream tag and replay every fork commit by intent:
+`git cherry-pick fleet-v<OLD>..origin/cherry` on a new branch made from
+`fleet-v<NEW>` (`cherry` points at the deployed version branch). Never cherry-pick
+only the latest commit. `build-release.py` refuses a `--version` that is not the
+upstream tag the commit is built on, and records that tag and commit in
+`build-provenance.json`. Keep raw license checks, privacy defaults, Android
+API/background routing and non-destructive provider guards in the audit. Compare
+`tools/mod-project/Dockerfile`'s base image with upstream's `tools/fleet-docker/Dockerfile`.
+Rebuild/test the actual container and verify all remote branch, image and asset hashes
+before moving the `cherry` ref.
+
+Orbit and Fleet Desktop for Macs are built, signed, notarized and published to the
+private TUF server separately (operator scripts outside this repository), from the
+same version branch. When upstream ships a new Orbit, rebuild them from that branch
+so the agent-side presentation changes reach devices.

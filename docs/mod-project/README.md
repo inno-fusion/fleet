@@ -7,9 +7,16 @@ not a Fleet license or Google Android Management API approval.
 
 ## Baseline and activation
 
-- Branch: `mod-project`.
-- Upstream release: `fleet-v4.94.1`.
-- Base commit: `7e7d17b75abd7a81f8320ca75531b47f0933bc1b`.
+- Release branch: `v4.95.0` (maintenance ref `cherry` once deployed). `mod-project`
+  keeps the original two-commit patch at `fleet-v4.94.1` for reference; do not
+  replay from it.
+- Upstream release: `fleet-v4.95.0`.
+- Base commit: `5790b6cafd149ad082d5a33a65e6ea016212560d`.
+- Fork changes: every commit in `git log --reverse fleet-v4.95.0..v4.95.0`.
+- Run GitOps and every license-sensitive `fleetctl` command with the fork-built
+  `fleetctl` of the same version. Upstream `fleetctl` treats tier `research` as Free
+  in its own client-side checks and silently skips fleet files, software and patch
+  deadline settings.
 - Enable local research features: `FLEET_LICENSE_LOCAL_RESEARCH=true`.
 - Leave `FLEET_LICENSE_KEY` unset in research mode. No signed license is invented.
 - Do not use `--dev` or `--dev_license` to activate this fork.
@@ -65,6 +72,32 @@ CSR endpoint is intentionally unavailable in local-signing mode; use the GET flo
 Local cryptographic tests use explicitly synthetic CA chains; they do not prove
 Apple portal acceptance. Renew the same APNs certificate using the same Apple
 account/topic. Changing push identities can require device re-enrollment.
+
+The vendor chain may end in Apple's SHA-1 self-signed Apple Root CA; the local signer
+accepts that one self-signature while still verifying every other link. Local signing
+is selected only when at least one vendor setting is non-empty, so check the variable
+names exactly (`FLEET_MDM_APPLE_MDM_VENDOR_CERT`, `_KEY`, `_CHAIN`): a misspelled name
+leaves all three empty and Fleet's hosted signer is used.
+
+## Own fleetd-base host and Platform SSO app IDs
+
+```yaml
+mdm:
+  fleetd_base_url: https://download.example.com        # FLEET_MDM_FLEETD_BASE_URL
+  apple_psso_app_ids: TEAMID.com.example.desktop,TEAMID.com.example.desktop.pssoextension  # FLEET_MDM_APPLE_PSSO_APP_IDS
+```
+
+- `fleetd_base_url` replaces `download.fleetdm.com` wherever MDM installs the fleetd
+  base package (automatic and manual enrollment, setup experience). It must be an
+  absolute `https` URL; a trailing slash is trimmed and invalid input aborts startup.
+  The host must serve `/stable/meta.json` and `/stable/fleetd-base-manifest.plist`,
+  with the manifest's package URL reachable over HTTPS. Bring the host up before the
+  first enrollment. If `meta.json` has no MSI entry the mirror is macOS-only: do not
+  turn on Windows MDM against it, because the Windows install command would carry an
+  empty URL.
+- `apple_psso_app_ids` lists the team-prefixed app IDs that Platform SSO trusts in the
+  served apple-app-site-association file and in registration-token validation, so a
+  Fleet Desktop built under your own Apple team works. Unset keeps Fleet's IDs.
 
 ## Apple app metadata
 
@@ -133,6 +166,18 @@ blocked. This branch is not an air-gapped distribution or proof of zero Fleet-ow
 network dependencies. Configure independent services and verify egress before
 making that claim.
 
+Fleet 4.95.0 adds two surfaces that research mode turns on because they check
+`IsPremium`:
+
+- The built-in MCP server (`POST /api/v1/fleet/mcp`), on by default for API-only users.
+  Set `server_settings.mcp_disabled: true` unless you use it.
+- AI configuration-profile generation (`/api/v1/fleet/autofill/configuration_profile/*`),
+  which forwards the admin's instructions to fleetdm.com. The dashboard only shows it
+  when webpack is built with `SHOW_AI_PROFILE_BUILDER`; the fork's release builder
+  removes that variable. `server_settings.ai_features_disabled: true` turns off all
+  hosted AI calls, including SQL policy descriptions. The fork records no usage count
+  for these generations.
+
 ## Verification and updates
 
 Use the commands and results in `docs/mod-project/VERIFICATION.md`. The dedicated
@@ -141,9 +186,10 @@ CI workflow only tests/builds; it does not publish containers or deploy devices.
 For future upstream updates:
 
 1. Fetch an explicit stable upstream release and record its immutable commit.
-2. Create a temporary update branch from the new release. Replay both mod-project
-   commits above the recorded base by intent (see the exact range command in
-   `VERIFICATION.md`); never force-push `main` or cherry-pick only the branch tip.
+2. Create the new version branch from the new release tag and replay every fork
+   commit above the previous release's upstream tag, taken from `cherry` (see the exact
+   range command in `VERIFICATION.md`). Resolve conflicts by intent, never force-push
+   `main`, and never cherry-pick only the branch tip.
 3. Review changes to `LicenseInfo`, license loading/context middleware, frontend
    tier comparisons, telemetry configuration/collection/sending, new capability
    gates, and all Fleet-hosted API calls. New features must not silently fall out
@@ -154,8 +200,9 @@ For future upstream updates:
 5. Build server/frontend and exercise disposable Mac/Android enrollment, profile,
    inventory and app workflows with legitimate platform credentials. Do not test
    wipe/lock on production devices. Check certificate and JWT renewal behavior.
-6. Record untested external requirements, review the diff, and push only the
-   approved `mod-project` ref after verifying the remote SHA.
+6. Record untested external requirements, review the diff, push the new version
+   branch and its `vX.Y.Z-mod` tag, publish the image, and move `cherry` only after
+   the deployment is healthy. `mod-project` stays as the historical patch.
 
 Do not copy `research` into a signed Fleet token, patch hosted authorization,
 remove upstream license notices, or equate a local unit test with a real device
