@@ -2,8 +2,8 @@
 
 ## Scope
 
-Baseline: Fleet `fleet-v4.95.0`, commit
-`5790b6cafd149ad082d5a33a65e6ea016212560d`. This is an opt-in local
+Baseline: Fleet `fleet-v4.96.0`, commit
+`74050d0ebf40a13febb3b1a1d9273072a9a9a9a0`. This is an opt-in local
 research entitlement, selective product-analytics removal, and independently
 configurable platform integration patch. It is not a signed Fleet subscription
 or a replacement for Apple/Google approval and credentials.
@@ -86,10 +86,68 @@ the upstream `docker-compose-redis-cluster.yml` environment. Do not equate a
 skipped integration test with a pass. On macOS, upstream supports
 `REDIS_TEST_SKIP_CLUSTER=1` for suites that intentionally omit cluster tests.
 
+## Recorded evidence: fleet-v4.96.0 replay (2026-11-24)
+
+Branch `v4.96.0` = `fleet-v4.96.0` plus the ten fork commits from `cherry`
+(`fleet-v4.95.0..refs/heads/v4.95.0`), replayed in order, then one test adaptation
+commit, one smoke-test commit and this docs commit.
+
+- Replay: only the research/routing commit conflicted, in three files. Upstream added
+  stats-only helpers and a Google conditional access statistics field to
+  `server/datastore/mysql/statistics.go`; the fork's stub stays and those helpers are
+  dropped with it. Upstream's new statistics tests in `statistics_test.go` and
+  `serve_test.go` stay deleted, as in 4.95.0. The other nine commits applied cleanly.
+- Adaptation: the Android provider-routing test stubs three datastore reads of
+  4.96.0's fleet default policy reconciler, which otherwise hit nil mock functions.
+- New 4.96.0 gates reviewed: Google conditional access connect, update, get and
+  delete, `integrations.google_conditional_access` in `PATCH /config` and GitOps, the
+  device sign-in and fleetdm.com register routes, `PUT /hosts/:id/google_device_id`
+  (now needs an active integration) and the two new Google conditional access crons
+  all go through `IsPremium`, so research passes and free keeps upstream's answer.
+  The new statistics gate is gone with the stubbed `statistics.go`. No new expiry,
+  quota or license-key consumers; frontend license helpers, banners and routing are
+  unchanged upstream. Smoke tests now cover the Google conditional access gate in
+  both tiers and its settings page in the research browser run.
+- Outbound calls added upstream: the fleetdm.com Google conditional access relay,
+  Google OAuth and Cloud Identity, and Microsoft's Entra endpoints. All are idle until
+  their integration is configured (see the README's hosted-service limits). Mail
+  templates and agent dialog assets are unchanged upstream.
+- Storage: `server/datastore/s3` is unchanged; the only `server/config` changes are
+  two optional conditional access keys, so S3 installer, icon, org logo and bootstrap
+  package stores behave as in 4.95.0.
+- Migrations: four, all forward-only. `20261110121303` copies
+  `host_google_device_ids` into the new Google conditional access table and drops it.
+  The 4.95.0 code still deletes from that table when a host is deleted, so rolling
+  back to a 4.95.0 image without restoring the pre-upgrade database breaks host
+  deletion. Restore the database together with the image.
+- Results: Go unit, Apple, Android and license packages, `-race` licensing and authz
+  suites, MySQL regressions (344 subtests, 0 skipped), Android routing, Platform SSO
+  and fleetd-base tests, mail and agent presentation tests all pass. Frontend: 23
+  suites, 305 tests; `tsc` clean. `build.sh` produced `4.96.0-mod-project` at the
+  clean smoke-test commit (the docs commit changes no code). Research HTTP + browser
+  smoke (22 checks, eight routes including the Google conditional access settings
+  page, no external browser requests) and free smoke (9 checks) pass. Android routing
+  18 subtests; `test_smoke_env.py` 5/5 and `test_build_release.py` 8/8 pass. Redis
+  cluster tests were skipped as documented.
+
+Known follow-ups, recorded rather than changed (the deployment is Mac-only):
+
+- Apple: registration-token validation for Platform SSO adds the configured app IDs
+  to Fleet's `com.fleetdm` prefix instead of replacing it, and compares bundle IDs
+  without the team ID; the served apple-app-site-association does replace Fleet's IDs.
+- Orbit: upstream cuts Orbit releases on separate branches (`orbit-v1.63.0`,
+  `orbit-v1.64.0`) that are not ancestors of `fleet-v4.96.0`, whose
+  `orbit/CHANGELOG.md` still tops at 1.62.1. Do not rebuild agents from this branch
+  under the 1.62.1 label.
+- Fleet 4.96 is the last 4.x minor. Fleet 5 renames teams, `/mdm/*` endpoints and
+  several config keys and removes `failing_policies_webhook.policy_ids`, so its
+  replay needs a full audit.
+- The 4.95.0 follow-ups below still apply.
+
 ## Recorded evidence: fleet-v4.95.0 replay (2026-11-17)
 
 Branch `v4.95.0` = `fleet-v4.95.0` plus the seven fork commits from `cherry`
-(`fleet-v4.94.1..v4.94.1`), replayed in order, then one adaptation commit and one
+(`fleet-v4.94.1..refs/heads/v4.94.1`), replayed in order, then one adaptation commit and one
 hardening commit for 4.95.0.
 
 - Replay: the research/routing commit conflicted in ten files (Android reconcile
@@ -221,7 +279,7 @@ holds only the original two commits.
 
 ```bash
 git fetch upstream --tags && git fetch origin
-OLD=4.95.0 NEW=<verified stable upstream version>
+OLD=4.96.0 NEW=<verified stable upstream version>
 git rev-list --count "fleet-v$OLD..origin/cherry"   # the fork commits to replay
 git switch -c "v$NEW" "refs/tags/fleet-v$NEW"
 git cherry-pick "fleet-v$OLD..origin/cherry"

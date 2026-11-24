@@ -7,16 +7,20 @@ not a Fleet license or Google Android Management API approval.
 
 ## Baseline and activation
 
-- Release branch: `v4.95.0` (maintenance ref `cherry` once deployed). `mod-project`
+- Release branch: `v4.96.0` (maintenance ref `cherry` once deployed). `mod-project`
   keeps the original two-commit patch at `fleet-v4.94.1` for reference; do not
   replay from it.
-- Upstream release: `fleet-v4.95.0`.
-- Base commit: `5790b6cafd149ad082d5a33a65e6ea016212560d`.
-- Fork changes: every commit in `git log --reverse fleet-v4.95.0..v4.95.0`.
+- Upstream release: `fleet-v4.96.0`.
+- Base commit: `74050d0ebf40a13febb3b1a1d9273072a9a9a9a0`.
+- Fork changes: every commit in `git log --reverse fleet-v4.96.0..refs/heads/v4.96.0`.
+  Upstream also publishes a lightweight tag `vX.Y.Z` on the same commit as
+  `fleet-vX.Y.Z`, and git prefers tags over branches, so a bare `v4.96.0` in a range
+  names upstream's commit and the range comes out empty. Write `refs/heads/vX.Y.Z`.
 - Run GitOps and every license-sensitive `fleetctl` command with the fork-built
   `fleetctl` of the same version. Upstream `fleetctl` treats tier `research` as Free
-  in its own client-side checks and silently skips fleet files, software and patch
-  deadline settings.
+  in its own client-side checks and silently skips fleet files, software, patch
+  deadline settings and Google conditional access. For the last one, `generate-gitops`
+  drops the setting and `gitops` then sends it as null, which disconnects it.
 - Enable local research features: `FLEET_LICENSE_LOCAL_RESEARCH=true`.
 - Leave `FLEET_LICENSE_KEY` unset in research mode. No signed license is invented.
 - Do not use `--dev` or `--dev_license` to activate this fork.
@@ -177,6 +181,22 @@ Fleet 4.95.0 adds two surfaces that research mode turns on because they check
   removes that variable. `server_settings.ai_features_disabled: true` turns off all
   hosted AI calls, including SQL policy descriptions. The fork records no usage count
   for these generations.
+
+Fleet 4.96.0 adds one more, Google conditional access for iOS, iPadOS and Android
+(Settings > Integrations > Conditional access, `/api/v1/fleet/conditional_access/google`,
+`integrations.google_conditional_access` in GitOps). Connecting it registers this
+server's URL and the Google customer ID with a relay on fleetdm.com
+(`google_conditional_access.proxy_uri`, default `https://fleetdm.com`), which keeps a
+shared secret and calls back `POST /api/v1/fleet/google_conditional_access/register`.
+iOS and iPadOS users then sign in through a fleetdm.com page that sees their Google
+email and host UUID. `ai_features_disabled` does not affect it. Leave it unconnected
+unless that is acceptable; its two background jobs do nothing while it is unset.
+
+4.96.0 also verifies Microsoft Entra conditional access on Macs with a device token:
+when Entra is configured, fleetd fetches a token from `login.microsoftonline.com`
+through Company Portal and the server fetches Microsoft's signing keys. Nothing
+happens while Entra conditional access is unset. Agents built before 4.96.0 lack the
+token runner, so rebuild them before turning Entra on.
 
 ## Verification and updates
 
