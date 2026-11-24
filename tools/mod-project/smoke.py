@@ -76,14 +76,20 @@ def main():
         request("POST", "/api/v1/fleet/fleets", {"name": "Forbidden"}, login["token"], expected=(403,))
         check(True, "research entitlement does not bypass observer RBAC")
         request("GET", f"/api/v1/fleet/software/patch_deadline_settings?fleet_id={team['id']}", token=token)
-        check(True, "Premium patch deadline settings (new in 4.95.0) work in research")
+        check(True, "Premium patch deadline settings (since 4.95.0) work in research")
+        check("google" in (config.get("conditional_access") or {}), "Google conditional access status (new in 4.96.0) is shown in research")
+        request("POST", "/api/v1/fleet/conditional_access/google", {}, token, expected=(422,))
+        check(True, "Google conditional access (new in 4.96.0) passes the Premium gate in research and validates input")
         request("DELETE", f"/api/v1/fleet/fleets/{team['id']}", token=token, expected=(200, 204))
         check(True, "created fleet removed through EE service")
     else:
         request("POST", "/api/v1/fleet/fleets", {"name": "Free must reject"}, token, expected=(402, 403))
         check(True, "no opt-in preserves the free-edition premium gate")
         request("GET", "/api/v1/fleet/software/patch_deadline_settings", token=token, expected=(402,))
-        check(True, "patch deadline settings (new in 4.95.0) stay Premium-only in free")
+        check(True, "patch deadline settings (since 4.95.0) stay Premium-only in free")
+        check("google" not in (config.get("conditional_access") or {}), "Google conditional access status (new in 4.96.0) is hidden in free")
+        request("POST", "/api/v1/fleet/conditional_access/google", {}, token, expected=(402,))
+        check(True, "Google conditional access (new in 4.96.0) stays Premium-only in free")
     print("SMOKE PASS: " + args.expected_tier)
     if args.browser:
         import os

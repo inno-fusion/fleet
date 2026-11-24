@@ -41,6 +41,7 @@ const { chromium } = require("playwright");
       "/settings/organization/statistics",
       "/account",
       "/software/library/settings/patch-deadline",
+      "/settings/integrations/conditional-access",
     ];
     for (const path of routes) {
       await page.goto(url + path, { waitUntil: "networkidle" });
